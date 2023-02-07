@@ -1,6 +1,6 @@
 # FALCC
 
-This repository contains the codes needed to reproduce the experiments of our submitted SIGMOD 2024 paper:
+This repository contains the codes needed to reproduce the experiments of our submitted FAccT 2023 paper:
 "FALCC: Efficiently performing fair and accurate local classifications through local region clustering"
 
 Run "full_test.py" and use that file to adapt the parameters (e.g. change datasets etc.).
