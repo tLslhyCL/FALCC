@@ -3,6 +3,8 @@
 This repository contains the codes needed to reproduce the experiments of our submitted FAccT 2023 paper:
 "FALCC: Efficiently performing fair and accurate local classifications through local region clustering"
 
+Update soon with new reproducibility experiments.
+
 Run "full_test.py" and use that file to adapt the parameters (e.g. change datasets etc.).
 The description is within that file. 
 For the second experiment, run "full_test_exp2.py". For this experiment it will run the SBT versions only.
