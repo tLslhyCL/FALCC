@@ -39,10 +39,10 @@ Further, we run LFR [4], iFair [5], FaX [6] & Fair-SMOTE [7]
 1. Required steps to run the files - Integration of other fair algorithms ([4]-[7]):
 - LFR [4]: No steps required, as we use the AIF360 framework implementation
 - iFair [5]:
-    - Create a folder called "iFair_helper" in 'FALCC_Code/algorithm/codes'
-    - Copy the content from the official implementation & put them inside this folder: https://github.com/plahoti-lgtm/iFair
-    - Change the "fit" method to use the following parameters: 'def fit(self, X_train, sens_attrs, dataset=None)'
-    - Adapt the first else-clause of the fit method to:
+  - Create a folder called "iFair_helper" in 'FALCC_Code/algorithm/codes'
+  - Copy the content from the official implementation & put them inside this folder: https://github.com/plahoti-lgtm/iFair
+  - Change the "fit" method to use the following parameters: 'def fit(self, X_train, sens_attrs, dataset=None)'
+  - Adapt the first else-clause of the fit method to:
         X_train_new = copy.deepcopy(X_train)
         for sens in sens_attrs:
             selector = [x for x in range(X_train_new.shape[1]) if x != sens]
