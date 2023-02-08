@@ -7,6 +7,7 @@ This repository contains the codes needed to reproduce the experiments of our su
 ## STRUCTURE
 
 The datasets can be found within 'FALCC_Code/Datasets/'.
+
 The results will be stored within 'FALCC_Code/Results/'.
 
 
@@ -14,6 +15,7 @@ The results will be stored within 'FALCC_Code/Results/'.
 
 The code implements and runs the algorithms FALCC, Decouple [1], FALCES and its variants [2], and FairBoost [3].
 For the algorithms of [1]-[3] we tried to implement the algorithms based on the information provided by the respective papers.
+
 Further, we run LFR [4], iFair [5], FaX [6] & Fair-SMOTE [7]
 
 - [1] Dwork C, Immorlica N, Kalai A, Leiserson M. "Decoupled Classifiers for Group-Fair
