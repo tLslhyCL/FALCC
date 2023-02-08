@@ -1,16 +1,16 @@
-## FALCC
+# FALCC
 
 This repository contains the codes needed to reproduce the experiments of our submitted FAccT 2023 paper:
 "FALCC: Efficiently performing locally fair and accurate classifications"
 
 
-# STRUCTURE
+## STRUCTURE
 
 The datasets can be found within 'FALCC_Code/Datasets/'.
 The results will be stored within 'FALCC_Code/Results/'.
 
 
-# IMPLEMENTATION
+## IMPLEMENTATION
 
 The code implements and runs the algorithms FALCC, Decouple [1], FALCES and its variants [2], and FairBoost [3].
 For the algorithms of [1]-[3] we tried to implement the algorithms based on the information provided by the respective papers.
@@ -32,7 +32,7 @@ Further, we run LFR [4], iFair [5], FaX [6] & Fair-SMOTE [7]
 - [7] Chakraborty J, Majumder S, Menzies T. "Bias in machine learning software: Why? how? what to do?." 2021.
 
 
-# HOWTO RUN
+## HOWTO RUN
 
 1. Required steps to run the files - Integration of other fair algorithms ([4]-[7]):
 - LFR [4]: No steps required, as we use the AIF360 framework implementation
