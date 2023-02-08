@@ -77,6 +77,11 @@ def fairness_score(metric, unfairness, model, fav_pppv, total_pppv, total_fp, to
             unfairness = unfairness + abs(1 - fav_pppv/model["pppv"].iloc[0])
         else:
             unfairness = unfairness + abs(1 - model["pppv"].iloc[0]/fav_pppv)
+    elif metric == "consistency":
+        if total_pppv[0] > 0.5:
+            unfairness = 1 - total_pppv[0]
+        else:
+            unfairness = total_pppv[0]
     return unfairness
 
 

@@ -39,7 +39,7 @@ runtime_analysis.at[analysis_counter, "algorithm"] = "FALCC"
 runtime_analysis.at[analysis_counter, "time"] = str(time.time() - start)
 analysis_counter = analysis_counter + 1
 
-if training != "no":
+if training != "no" and training != "fair":
     start = time.time()
     df = falccsbt.predict(model_dict_sbt, X_pred, y_pred, True, kmeans)
     df.to_csv(link + "FALCC-SBT_prediction_output.csv", index=False)
@@ -65,7 +65,7 @@ if testall:
     runtime_analysis.at[analysis_counter, "time"] = str(time.time() - start)
     analysis_counter = analysis_counter + 1
 
-    if training != "no":
+    if training != "no" and training != "fair":
         start = time.time()
         df = falcesnewsbt.predict(test_df_sbt, X_pred, y_pred, "performance-efficient", metric, weight, True,
             knn_size, global_model_comb_sbt)
@@ -97,7 +97,7 @@ if testall:
     runtime_analysis.at[analysis_counter, "time"] = str(time.time() - start)
     analysis_counter = analysis_counter + 1
 
-    if training != "no":
+    if training != "no" and training != "fair":
         start = time.time()
         df = falcesnewsbt.predict(test_df_sbt, X_pred, y_pred, "naive", metric, weight, True, knn_size)
         df.to_csv(link + "FALCES-SBT-NEW_prediction_output.csv", index=False)

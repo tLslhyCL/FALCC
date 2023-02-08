@@ -1,16 +1,10 @@
 """
 Call methods for the offline phase of the FALCC algorithm. Also runs the offline phase of the
-FALCES [2] algorithm and its variants & calls the algorithms for FairBoost [3] and Decouple [1].
-[1] Dwork, C., Immorlica, N., Kalai, A., Leiserson, M. "Decoupled Classifiers for Group-Fair
-    and Efficient Machine Learning". 2018.
-[2] Lässig, N., Oppold, S., Herschel, M. "Metrics and Algorithms for Locally Fair and Accurate
-    Classifications using Ensembles". 2022.
-[3] Bhaskaruni, D., Hu, H., Lan, C. "Improving Prediction Fairness via Model Ensemble". 2019.
+FALCES [2] algorithm and its variants & runs the other algorithms.
 """
 import warnings
 import argparse
 import shelve
-import time
 import ast
 import copy
 import math
@@ -26,6 +20,15 @@ from kneed import KneeLocator
 import algorithm
 from algorithm.codes import Metrics
 from algorithm.parameter_estimation import log_means
+from algorithm.codes.FaX_AI.FaX_methods import MIM
+from algorithm.codes.Fair_SMOTE.SMOTE import smote
+from algorithm.codes.Fair_SMOTE.Generate_Samples import generate_samples
+from algorithm.codes.iFair_helper.iFair import iFair
+from sklearn.linear_model import LogisticRegression
+from aif360.algorithms.preprocessing import *
+from aif360.datasets import BinaryLabelDataset
+
+
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -76,6 +79,8 @@ parser.add_argument("--cluster_algorithm", "--ca", default="elbow", type=str, he
     clustering algorithm that should be used to estimate the amount of clusters, if no clustersize\
     is given. Currently supported: [LOGmeans, elbow]. Default: elbow")
 parser.add_argument("--fairboost", default=True, type=str, help="Set to true if the FairBoost\
+    should and can be run. Default: True")
+parser.add_argument("--ifair", default=True, type=str, help="Set to true if the iFair algorithm\
     should and can be run. Default: True")
 parser.add_argument("--proxy", default="no", type=str, help="Set if proxy technique should be used.\
     Options: no, reweigh, remove. Default: no.")
@@ -128,12 +133,21 @@ if args.fairboost == "True":
     fairboost = True
 else:
     fairboost = False
+if args.ifair == "True":
+    ifair = True
+else:
+    ifair = False
 if args.trained_models != None:
     trained_models = ast.literal_eval(args.trained_models)
 
 if randomstate == -1:
     import random
     randomstate = random.randint(1,1000)
+
+if training == "fair":
+    fairinput = True
+else:
+    fairinput = False
 
 #Read the input dataset & split it into training, test & prediction dataset.
 #Prediction dataset only needed for evaluation, otherwise size is automatically 0.
@@ -165,16 +179,17 @@ y_test = y_test.to_frame()
 y_pred = y_pred.to_frame()
 
 #AdaBoost Training & Testing results of each classifier.
-start = time.time()
 if training == "single_classifiers":
     model_training_list = ["DecisionTree", "LinearSVM", "NonlinearSVM",\
         "LogisticRegression", "SoftmaxRegression"]
-else:
+elif training == "fair":
+    model_training_list = ["FaX", "Fair-SMOTE", "LFR"]
+elif training == "adaboost":
     model_training_list = ["AdaBoost"]
 
 
 if training != "no":
-    run_main = algorithm.RunTraining(X_test, y_test, test_id_list, sens_attrs, index, label, link,
+    run_main = algorithm.RunTraining(X_test, y_test, test_id_list, sens_attrs, index, label, favored, link,
         ignore_sens)
     if not "sample_weight" in locals():
         sample_weight = None
@@ -184,14 +199,15 @@ if training != "no":
     test_df.to_csv(link + "testdata_predictions.csv", index_label=index)
     test_df = test_df.sort_index()
 
-    key_list = []
-    grouped_df = df.groupby(sens_attrs)
-    for key, items in grouped_df:
-        key_list.append(key)
-    test_df_sbt, d_sbt, model_list_sbt, model_comb_sbt = run_main.sbt_train(model_training_list,
-        X_train, y_train, train_id_list, sample_weight, key_list, modelsize)
-    test_df_sbt.to_csv(link + "testdata_sbt_predictions.csv", index_label=index)
-    test_df_sbt = test_df_sbt.sort_index()
+    if training != "fair":
+        key_list = []
+        grouped_df = df.groupby(sens_attrs)
+        for key, items in grouped_df:
+            key_list.append(key)
+        test_df_sbt, d_sbt, model_list_sbt, model_comb_sbt = run_main.sbt_train(model_training_list,
+            X_train, y_train, train_id_list, sample_weight, key_list, modelsize)
+        test_df_sbt.to_csv(link + "testdata_sbt_predictions.csv", index_label=index)
+        test_df_sbt = test_df_sbt.sort_index()
 else:
     d = dict()
     model_list = []
@@ -221,27 +237,210 @@ else:
 metricer = Metrics(sens_attrs, label)
 model_test = metricer.test_score(test_df, model_list)
 model_test.to_csv(link + "inaccuracy_testphase.csv", index_label=index)
-if training != "no":
+if training != "no" and training != "fair":
     model_test_sbt = metricer.test_score_sbt(test_df_sbt, d_sbt)
     model_test_sbt.to_csv(link + "inaccuracy_testphase_sbt.csv", index_label=index)
     model_test_sbt = model_test_sbt.sort_index()
 
 
-if testall:
+if testall == True:
     #Decouple Algorithm Predictions
-    if training != "no":
-        decouple_alg = algorithm.Decouple(metricer, index, pred_id_list, sens_attrs, label, favored, model_comb_sbt)
+    if training != "no" and training != "fair":
+        decouple_alg = algorithm.Decouple(metricer, index, pred_id_list, sens_attrs, label, favored, model_comb_sbt, link, fairinput)
         df_result = decouple_alg.decouple(model_test_sbt, X_pred, y_pred, metric, weight, sbt=True)
         df_result.to_csv(link + "Decouple-SBT_prediction_output.csv", index=False)
-    decouple_alg = algorithm.Decouple(metricer, index, pred_id_list, sens_attrs, label, favored, model_comb)
+    decouple_alg = algorithm.Decouple(metricer, index, pred_id_list, sens_attrs, label, favored, model_comb, link, fairinput)
     df_result = decouple_alg.decouple(model_test, X_pred, y_pred, metric, weight, sbt=False)
     df_result.to_csv(link + "Decouple_prediction_output.csv", index=False)
 
-    #Run the FairBoost Algorithm (if it can run)
-    if fairboost:
-        fb = algorithm.FairBoost(index, pred_id_list, sens_attrs, favored, label, DecisionTreeClassifier())
-        df_result = fb.fit_predict(X_train, y_train, X_pred, y_pred, r=0.1)
-        df_result.to_csv(link + "FairBoost_prediction_output.csv", index=False)
+    
+    if len(sens_attrs) == 1:
+        #Run the FairBoost Algorithm
+        if fairboost:
+            fb = algorithm.FairBoost(index, pred_id_list, sens_attrs, favored, label, DecisionTreeClassifier())
+            df_result = fb.fit_predict(X_train, y_train, X_pred, y_pred, r=0.1)
+            df_result.to_csv(link + "FairBoost_prediction_output.csv", index=False)
+
+        if ifair:
+            classifier = LogisticRegression(solver='lbfgs')
+            sens_attrs_ids = []
+            for sens in sens_attrs:
+                sens_attrs_ids.append(X_train.columns.get_loc(sens))
+            sens_attrs_ids.sort(reverse=True)
+            X_train = X_train.to_numpy()
+            model = iFair(max_iter=10)
+            model.fit(X_train, sens_attrs_ids)
+            X_test = self.X_test.to_numpy()
+            X_train_new = model.transform(X_train)
+
+            classifier.fit(X_train_new, y_train.to_numpy())
+            pred = classifier.predict(X_pred)
+            res_df = copy.deepcopy(X_pred)
+            res_df["iFair"] = pred
+            res_df.to_csv(link + "iFair_prediction_output.csv")
+
+        #FaX Classifier Predictions
+        ##Only work for binary groups
+        X2 = X_train.loc[:, X_train.columns != sens_attrs[0]]
+        Z2 = X_train[sens_attrs[0]].to_frame()
+        Y2 = y_train
+
+        X3 = X_pred.loc[:, X_pred.columns != sens_attrs[0]]
+        Z3 = X_pred[sens_attrs[0]].to_frame()
+        Y3 = y_pred
+
+        fax = MIM(X2, Z2, Y2)
+        prediction = fax.predict(X3)
+        res_df = copy.deepcopy(X_pred)
+        res_df["FaX"] = prediction
+        res_df.to_csv(link + "FaX_prediction_output.csv")
+
+        #SMOTE Predictions
+        train_df = copy.deepcopy(X_train)
+        train_df[label] = y_train
+        dataset_orig_train = copy.deepcopy(train_df)
+        train_df.reset_index(drop=True, inplace=True)
+        cols = train_df.columns
+        smt = smote(train_df)
+        train_df = smt.run()
+        train_df.columns = cols
+        y_train_new = train_df[label]
+        X_train_new = train_df.drop(label, axis=1)
+
+        dict_cols = dict()
+        cols = list(train_df.columns)
+        for i, col in enumerate(cols):
+            dict_cols[i] = col
+        #Find Class & protected attribute distribution
+        zero_zero = len(dataset_orig_train[(dataset_orig_train[label] == 0)
+            & (dataset_orig_train[sens_attrs[0]] == 0)])
+        zero_one = len(dataset_orig_train[(dataset_orig_train[label] == 0)
+            & (dataset_orig_train[sens_attrs[0]] == 1)])
+        one_zero = len(dataset_orig_train[(dataset_orig_train[label] == 1)
+            & (dataset_orig_train[sens_attrs[0]] == 0)])
+        one_one = len(dataset_orig_train[(dataset_orig_train[label] == 1)
+            & (dataset_orig_train[sens_attrs[0]] == 1)])
+        maximum = max(zero_zero,zero_one,one_zero,one_one)
+        if maximum == zero_zero:
+            zero_one_to_be_incresed = maximum - zero_one
+            one_zero_to_be_incresed = maximum - one_zero
+            one_one_to_be_incresed = maximum - one_one
+            df_zero_one = dataset_orig_train[(dataset_orig_train[label] == 0)
+                & (dataset_orig_train[sens_attrs[0]] == 1)]
+            df_one_zero = dataset_orig_train[(dataset_orig_train[label] == 1)
+                & (dataset_orig_train[sens_attrs[0]] == 0)]
+            df_one_one = dataset_orig_train[(dataset_orig_train[label] == 1)
+                & (dataset_orig_train[sens_attrs[0]] == 1)]
+            df_zero_one = generate_samples(zero_one_to_be_incresed,df_zero_one,'',dict_cols)
+            df_one_zero = generate_samples(one_zero_to_be_incresed,df_one_zero,'',dict_cols)
+            df_one_one = generate_samples(one_one_to_be_incresed,df_one_one,'',dict_cols)
+            df_new = copy.deepcopy(df_zero_one)
+            df_new = df_new.append(df_one_zero)
+            df_new = df_new.append(df_one_one)
+            df_zero_zero = dataset_orig_train[(dataset_orig_train[label] == 0)
+                & (dataset_orig_train[sens_attrs[0]] == 0)]
+            df_new = df_new.append(df_zero_zero)
+        if maximum == zero_one:
+            zero_zero_to_be_incresed = maximum - zero_zero
+            one_zero_to_be_incresed = maximum - one_zero
+            one_one_to_be_incresed = maximum - one_one
+            df_zero_zero = dataset_orig_train[(dataset_orig_train[label] == 0)
+                & (dataset_orig_train[sens_attrs[0]] == 0)]
+            df_one_zero = dataset_orig_train[(dataset_orig_train[label] == 1)
+                & (dataset_orig_train[sens_attrs[0]] == 0)]
+            df_one_one = dataset_orig_train[(dataset_orig_train[label] == 1)
+                & (dataset_orig_train[sens_attrs[0]] == 1)]
+            df_zero_zero = generate_samples(zero_zero_to_be_incresed,df_zero_zero,'',dict_cols)
+            df_one_zero = generate_samples(one_zero_to_be_incresed,df_one_zero,'',dict_cols)
+            df_one_one = generate_samples(one_one_to_be_incresed,df_one_one,'',dict_cols)
+            df_new = copy.deepcopy(df_zero_zero)
+            df_new = df_new.append(df_one_zero)
+            df_new = df_new.append(df_one_one)
+            df_zero_one = dataset_orig_train[(dataset_orig_train[label] == 0)
+                & (dataset_orig_train[sens_attrs[0]] == 1)]
+            df_new = df_new.append(df_zero_one)
+        if maximum == one_zero:
+            zero_zero_to_be_incresed = maximum - zero_zero
+            zero_one_to_be_incresed = maximum - zero_one
+            one_one_to_be_incresed = maximum - one_one
+            df_zero_zero = dataset_orig_train[(dataset_orig_train[label] == 0)
+                & (dataset_orig_train[sens_attrs[0]] == 0)]
+            df_zero_one = dataset_orig_train[(dataset_orig_train[label] == 0)
+                & (dataset_orig_train[sens_attrs[0]] == 1)]
+            df_one_one = dataset_orig_train[(dataset_orig_train[label] == 1)
+                & (dataset_orig_train[sens_attrs[0]] == 1)]
+            df_zero_zero = generate_samples(zero_zero_to_be_incresed,df_zero_zero,'',dict_cols)
+            df_zero_one = generate_samples(zero_one_to_be_incresed,df_zero_one,'',dict_cols)
+            df_one_one = generate_samples(one_one_to_be_incresed,df_one_one,'',dict_cols)
+            df_new = copy.deepcopy(df_zero_zero)
+            df_new = df_new.append(df_zero_one)
+            df_new = df_new.append(df_one_one)
+            df_one_zero = dataset_orig_train[(dataset_orig_train[label] == 1)
+                & (dataset_orig_train[sens_attrs[0]] == 0)]
+            df_new = df_new.append(df_one_zero)
+        if maximum == one_one:
+            zero_zero_to_be_incresed = maximum - zero_zero
+            one_zero_to_be_incresed = maximum - one_zero
+            zero_one_to_be_incresed = maximum - zero_one
+            df_zero_zero = dataset_orig_train[(dataset_orig_train[label] == 0)
+                & (dataset_orig_train[sens_attrs[0]] == 0)]
+            df_one_zero = dataset_orig_train[(dataset_orig_train[label] == 1)
+                & (dataset_orig_train[sens_attrs[0]] == 0)]
+            df_zero_one = dataset_orig_train[(dataset_orig_train[label] == 0)
+                & (dataset_orig_train[sens_attrs[0]] == 1)]
+            df_zero_zero = generate_samples(zero_zero_to_be_incresed,df_zero_zero,'',dict_cols)
+            df_one_zero = generate_samples(one_zero_to_be_incresed,df_one_zero,'',dict_cols)
+            df_zero_one = generate_samples(zero_one_to_be_incresed,df_zero_one,'',dict_cols)
+            df_new = copy.deepcopy(df_zero_zero)
+            df_new = df_new.append(df_one_zero)
+            df_new = df_new.append(df_zero_one)
+            df_one_one = dataset_orig_train[(dataset_orig_train[label] == 1)
+                & (dataset_orig_train[sens_attrs[0]] == 1)]
+            df_new = df_new.append(df_one_one)
+
+        X_train_new, y_train_new = df_new.loc[:, df_new.columns != label], df_new[label]
+        clf = LogisticRegression(C=1.0, penalty="l2", solver="liblinear", max_iter=100)
+        clf.fit(X_train_new, y_train_new)
+        prediction = clf.predict(X_pred)
+        res_df = copy.deepcopy(X_pred)
+        res_df["Fair-SMOTE"] = prediction
+        res_df.to_csv(link + "Fair-SMOTE_prediction_output.csv")
+
+
+        #LFR Predictions
+        train_df = pd.merge(X_train, y_train, left_index=True, right_index=True)
+        pred_df = pd.merge(X_pred, y_pred, left_index=True, right_index=True)
+        dataset_train = BinaryLabelDataset(df=train_df, label_names=[label], protected_attribute_names=sens_attrs)
+        dataset_pred = BinaryLabelDataset(df=pred_df, label_names=[label], protected_attribute_names=sens_attrs)
+        full_dataset = BinaryLabelDataset(df=df, label_names=[label], protected_attribute_names=sens_attrs)
+
+        ###Only binary now
+        privileged_groups = []
+        unprivileged_groups = []
+        priv_dict = dict()
+        unpriv_dict = dict()
+        priv_val = favored
+        if favored == 0:
+            priv_dict[sens_attrs[0]] = 0
+            unpriv_dict[sens_attrs[0]] = 1
+        elif favored == 1:
+            priv_dict[sens_attrs[0]] = 1
+            unpriv_dict[sens_attrs[0]] = 0
+
+        privileged_groups = [priv_dict]
+        unprivileged_groups = [unpriv_dict]
+
+        model = LFR(unprivileged_groups, privileged_groups)
+        model = model.fit(dataset_train)
+        dataset_transf_train = model.transform(dataset_train)
+        dataset_transf_pred = model.transform(dataset_pred)
+
+        preds = list(dataset_transf_pred.labels)
+        prediction = [preds[i][0] for i in range(len(preds))]
+        res_df = copy.deepcopy(X_pred)
+        res_df["LFR"] = prediction
+        res_df.to_csv(link + "LFR_prediction_output.csv")
+
 
 
 #Estimate the clustersize and then create the clusters
@@ -264,6 +463,8 @@ if proxy == "reweigh":
             for sens in sens_attrs:
                 z_arr = df_new[sens]
                 sens_corr = abs(pearsonr(x_arr, z_arr)[0])
+                if math.isnan(sens_corr):
+                    sens_corr = 1
                 col_diff += (1 - sens_corr)
             col_weight = col_diff/len(sens_attrs)
             weight_dict[col] = col_weight
@@ -292,6 +493,8 @@ elif proxy == "remove":
                 z_arr = df_new[sens]
                 pearson = pearsonr(x_arr, z_arr)
                 sens_corr = abs(pearson[0])
+                if math.isnan(sens_corr):
+                    sens_corr = 1
                 if sens_corr > 0.5 and pearson[1] < 0.05:
                     X_test_new = X_test_new.loc[:, X_test_new.columns != col]
                     cont = True
@@ -365,33 +568,31 @@ if proxy == "no":
 
 #Run all offline versions of the FALCC and FALCES algorithms
 falcc = algorithm.FALCC(metricer, index, sens_attrs, label, favored, model_list, X_test,
-    model_comb, d, proxy, weight_dict, ignore_sens, pre_processed)
-model_dict, kmeans = falcc.cluster_offline(X_test_cluster, kmeans, test_df, metric, weight,
-    link, sbt=False)
+    model_comb, d, proxy, link, fairinput, weight_dict, ignore_sens, pre_processed)
+model_dict, kmeans = falcc.cluster_offline(X_test_cluster, kmeans, test_df, metric, weight, sbt=False)
 
-if training != "no":
+if training != "no" and training != "fair":
     falccsbt = algorithm.FALCC(metricer, index, sens_attrs, label, favored, model_list_sbt,
-        X_test, model_comb_sbt, d_sbt, proxy, weight_dict, ignore_sens, pre_processed)
+        X_test, model_comb_sbt, d_sbt, proxy, link, fairinput,  weight_dict, ignore_sens, pre_processed)
     model_dict_sbt, kmeans = falccsbt.cluster_offline(X_test_cluster, kmeans, test_df_sbt,
-        metric, weight, link, sbt=True)
+        metric, weight, sbt=True)
 
-if testall:
+if testall == True:
     falces = algorithm.FALCES(metricer, index, sens_attrs, label, favored, model_list,
-        X_test, model_comb, d, pre_processed)
+        X_test, model_comb, d, link, fairinput, pre_processed)
     global_model_comb = falces.efficient_offline(model_test, metric, weight, threshold, comb_amount)
 
-    if training != "no":
+    if training != "no" and training != "fair":
         falcessbt = algorithm.FALCES(metricer, index, sens_attrs, label, favored, model_list_sbt,
-            X_test, model_comb_sbt, d_sbt, pre_processed)
+            X_test, model_comb_sbt, d_sbt, link, fairinput, pre_processed)
         global_model_comb_sbt = falcessbt.efficient_offline(model_test_sbt, metric, weight, threshold,
             comb_amount)
 
     falcesnew = algorithm.FALCESNew(metricer, index, sens_attrs, label, favored, model_list,
-        X_test, model_comb, d, pre_processed)
-    if training != "no":
+        X_test, model_comb, d, link, fairinput, pre_processed)
+    if training != "no" and training != "fair":
         falcesnewsbt = algorithm.FALCESNew(metricer, index, sens_attrs, label, favored, model_list_sbt,
-            X_test, model_comb_sbt, d_sbt, pre_processed)
-
+            X_test, model_comb_sbt, d_sbt, link, fairinput, pre_processed)
 
 
 #Shelve all variables and save it the folder.

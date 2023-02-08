@@ -5,6 +5,7 @@ of the FALCC algorithm.
 import copy
 import pandas as pd
 import joblib
+from aif360.datasets import BinaryLabelDataset
 from sklearn.neighbors import NearestNeighbors
 
 class FALCC:
@@ -43,6 +44,12 @@ class FALCC:
     proxy: string
         Name of the proxy strategy used
 
+    link: str
+        Link of the output directory.
+
+    fairinput: boolean
+        Is set to True, if we use fair classifiers as input.
+
     weight_dict: dictionary
         Dictionary containing the column weights (if a proxy strategy is used)
 
@@ -53,8 +60,8 @@ class FALCC:
         Is set to True, if the datasets have been properly preprocessed. For the current
         new approach, this is a requirement.
     """
-    def __init__(self, metricer, index, sens_attrs, label, favored, model_list, X_test,
-        model_comb, d, proxy, weight_dict=None, ignore_sens=False, pre_processed=True):
+    def __init__(self, metricer, index, sens_attrs, label, favored, model_list, X_test, model_comb,
+        d, proxy, link, fairinput, weight_dict=None, ignore_sens=False, pre_processed=True):
         self.metricer = metricer
         self.index = index
         self.sens_attrs = sens_attrs
@@ -65,6 +72,8 @@ class FALCC:
         self.model_comb = model_comb
         self.d = d
         self.proxy = proxy
+        self.link = link
+        self.fairinput = fairinput
         self.weight_dict = weight_dict
         self.ignore_sens = ignore_sens
         self.pre_processed = pre_processed
@@ -128,6 +137,20 @@ class FALCC:
                 Z_pred = Z_pred.loc[:, Z_pred.columns != sens]
         Z2_pred = copy.deepcopy(Z_pred)
 
+
+        if self.fairinput:
+            ##For FaX if needed
+            X3 = copy.deepcopy(X_pred)
+            X3 = X3.loc[:, X3.columns != self.sens_attrs[0]]
+
+            ##For LFR if needed
+            lfr_pred_df = pd.merge(X_pred, y_pred, left_index=True, right_index=True)
+            dataset_pred = BinaryLabelDataset(df=lfr_pred_df, label_names=[self.label], protected_attribute_names=self.sens_attrs)
+            lfr_model = joblib.load(self.link + "LFR_model.pkl")
+            dataset_transf_pred = lfr_model.transform(dataset_pred)
+            lfr_preds = list(dataset_transf_pred.labels)
+            lfr_prediction = [lfr_preds[i][0] for i in range(len(lfr_preds))]
+
         for i in range(len(X_pred)):
             sens_value = []
             for attr in self.sens_attrs:
@@ -146,7 +169,12 @@ class FALCC:
             else:
                 Z2_pred.iloc[i][self.sens_attrs[0]] = 1
 
-            prediction = used_model.predict(Z_pred.iloc[i].values.reshape(1, -1))[0]
+            if "FaX" in model:
+                prediction = used_model.predict(X3.iloc[i].values.reshape(1, -1))[0]
+            elif "LFR" in model:
+                prediction = lfr_prediction[i]
+            else:
+                prediction = used_model.predict(Z_pred.iloc[i].values.reshape(1, -1))[0]
 
             pred_df.at[pred_count, self.index] = y_pred.index[i]
             for attr in self.sens_attrs:
@@ -160,7 +188,7 @@ class FALCC:
         return pred_df
 
 
-    def cluster_offline(self, X_test_cluster, kmeans, test_df, metric, weight, link,
+    def cluster_offline(self, X_test_cluster, kmeans, test_df, metric, weight,
         other_folder=None, sbt=True):
         """The third step of the offline phase of FALCC and FALCC-SBT.
 
@@ -182,9 +210,6 @@ class FALCC:
             Value to balance the accuracy and fairness parts of the metrics.
             Under 0.5: Give fairness higher importance.
             Over 0.5: Give accuracy higher importance.
-
-        link: string
-            Directory where data should be saved.
 
         other_folder: string
             Additional folder string, solely used for the 2nd experiment.
@@ -237,8 +262,8 @@ class FALCC:
                         for key2, item2 in grouped_df:
                             if key2 == sens_grp:
                                 knn_df = grouped_df.get_group(key2)
-                                for sens_attr in self.sens_attrs:
-                                    knn_df = knn_df.loc[:, knn_df.columns != sens_attr]
+                                #for sens_attr in self.sens_attrs:
+                                 #   knn_df = knn_df.loc[:, knn_df.columns != sens_attr]
                                 nbrs = NearestNeighbors(n_neighbors=15, algorithm='kd_tree').fit(knn_df.values)
                                 indices = nbrs.kneighbors(cluster_center.reshape(1, -1), return_distance=False)
                                 real_indices = self.X_test.index[indices].tolist()
@@ -248,18 +273,18 @@ class FALCC:
             if not sbt:
                 model_test = self.metricer.test_score(part_df2, self.model_list)
                 if other_folder != None:
-                    model_test.to_csv(link + str(other_folder) + "/" + str(key) + "_inaccuracy_testphase.csv",
+                    model_test.to_csv(self.link + str(other_folder) + "/" + str(key) + "_inaccuracy_testphase.csv",
                         index_label=self.index)
                 else:
-                    model_test.to_csv(link + str(key) + "_inaccuracy_testphase.csv",
+                    model_test.to_csv(self.link + str(key) + "_inaccuracy_testphase.csv",
                         index_label=self.index)
             else:
                 model_test = self.metricer.test_score_sbt(part_df2, self.d)
                 if other_folder != None:
-                    model_test.to_csv(link + str(other_folder) + "/" + str(key) + "_inaccuracy_testphase_sbt.csv",
+                    model_test.to_csv(self.link + str(other_folder) + "/" + str(key) + "_inaccuracy_testphase_sbt.csv",
                         index_label=self.index)
                 else:
-                    model_test.to_csv(link + str(key) + "_inaccuracy_testphase_sbt.csv",
+                    model_test.to_csv(self.link + str(key) + "_inaccuracy_testphase_sbt.csv",
                         index_label=self.index)
             comb_list_global, group_tuple = self.metricer.fairness_metric(model_test,
                 self.model_comb, self.favored, metric, weight, comb_amount=1)

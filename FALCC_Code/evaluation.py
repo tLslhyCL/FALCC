@@ -56,9 +56,9 @@ for i, rows in df.iterrows():
 dataset = orig_dataset.loc[data_index_list]
 
 #Create DataFrame with all columns for the evaluation result.
-result_df = pd.DataFrame(columns=["dataset", "model", "inaccuracy", "demographic_parity",
+result_df = pd.DataFrame(columns=["dataset", "model", "accuracy", "demographic_parity",
     "equalized_odds", "equal_opportunity", "treatment_equality", "lrd_dp", "lrd_eod", "lrd_eop",
-    "lrd_te", "impact", "group_testsize", "group_predsize"])
+    "lrd_te", "impact", "f1_score", "group_testsize", "group_predsize"])
 
 #Now evaluate each model according to the metrics implemented.
 model_count = 0
@@ -73,7 +73,9 @@ my_shelf.close()
 for model in model_list:
     result_df.at[model_count, "model"] = model
     result_df.at[model_count, "dataset"] = ds
+
     grouped_df = df.groupby(sens_attrs)
+    counter_score = 0
     total_ppv = 0
     total_size = 0
     total_ppv_y0 = 0
@@ -87,6 +89,8 @@ for model in model_list:
     wrong_predicted_y1 = 0
     total_fp = 0
     total_fn = 0
+    num_pos = 0
+    num_neg = 0
     group_predsize = []
     #Get the favored group to test against and also the averages over the whole dataset
     for key, item in grouped_df:
@@ -97,18 +101,25 @@ for model in model_list:
             total_ppv = total_ppv + row[model]
             total_size = total_size + 1
             wrong_predicted = wrong_predicted + abs(row[model] - row[label])
+            #counter_score = counter_score + abs(row[model] - cdf.loc[i, model])
             if row[label] == 0:
                 total_ppv_y0 = total_ppv_y0 + row[model]
                 total_size_y0 = total_size_y0 + 1
                 wrong_predicted_y0 = wrong_predicted_y0 + abs(row[model] - row[label])
                 if row[model] == 1:
                     total_fp += 1
+                    num_pos += 1
+                else:
+                    num_neg += 1
             elif row[label] == 1:
                 total_ppv_y1 = total_ppv_y1 + row[model]
                 total_size_y1 = total_size_y1 + 1
                 wrong_predicted_y1 = wrong_predicted_y1 + abs(row[model] - row[label])
                 if row[model] == 0:
                     total_fn += 1
+                    num_neg += 1
+                else:
+                    num_pos += 1
             if key == favored:
                 fav_ppv = fav_ppv + row[model]
                 fav_size = fav_size + 1
@@ -124,11 +135,21 @@ for model in model_list:
             testsize += 1
         group_testsize.append(testsize)
 
-
-    result_df.at[model_count, "inaccuracy"] = wrong_predicted/total_size * 100
-    result_df.at[model_count, "accuracy"] = 100 - wrong_predicted/total_size * 100
+    inaccuracy = wrong_predicted/total_size * 100
+    result_df.at[model_count, "inaccuracy"] = inaccuracy
+    result_df.at[model_count, "accuracy"] = 100 - inaccuracy
     result_df.at[model_count, "group_testsize"] = group_testsize
     result_df.at[model_count, "group_predsize"] = group_predsize
+    tp = num_pos - total_fp
+    try:
+        f1 = tp/(tp + 0.5*(total_fp+total_fn))
+    except Exception:
+        f1 = 0
+    result_df.at[model_count, "f1_score"] = f1 * 100
+    result_df.at[model_count, "fp"] = total_fp
+    result_df.at[model_count, "fn"] = total_fn
+    result_df.at[model_count, "num_pos"] = num_pos
+    result_df.at[model_count, "num_neg"] = num_neg
     testsize = 0
     predsize = 0
     for i in range(len(group_testsize)):
@@ -273,13 +294,18 @@ models_lrd_dp = []
 models_lrd_eod = []
 models_lrd_eop = []
 models_lrd_te = []
+models_lrd_const = []
 #Calculate local region discrimination (lrd) of the model.
 for model in model_list:
+    total_size = 0
     lrd_dp = 0
     lrd_eod = 0
     lrd_eop = 0
     lrd_te = 0
+    lrd_const = 0
+    clusters = 0
     for key, item in clustered_df:
+        clusters += 1
         part_df = clustered_df.get_group(key)
         index_list = []
         for i, row in part_df.iterrows():
@@ -364,6 +390,7 @@ for model in model_list:
         lrd_local_eod = 0
         lrd_local_eop = 0
         lrd_local_te = 0
+        lrd_local_const = 0
         cluster_count = 0
         cluster_count_y0 = 0
         cluster_count_y1 = 0
@@ -418,23 +445,68 @@ for model in model_list:
             else:
                 lrd_local_te = lrd_local_te + abs(fp/(fp+fn) - total_fp/(total_fp+total_fn))
 
-        lrd_dp = lrd_dp + lrd_local_dp * cluster_count/total_size
-        lrd_eod = lrd_eod + lrd_local_eod * cluster_count/total_size
-        lrd_eop = lrd_eop + lrd_local_eop * cluster_count/total_size
-        lrd_te = lrd_te + lrd_local_te * cluster_count/total_size
+        lrd_dp = lrd_dp + lrd_local_dp/len(grouped_df) * cluster_count
+        lrd_eod = lrd_eod + lrd_local_eod/len(grouped_df) * cluster_count
+        lrd_eop = lrd_eop + lrd_local_eop/len(grouped_df) * cluster_count
+        lrd_te = lrd_te + lrd_local_te/len(grouped_df) * cluster_count
+        lrd_const = lrd_const + min(1-total_pppv, total_pppv) * cluster_count
+        total_size += cluster_count
 
-    models_lrd_dp.append(lrd_dp)
-    models_lrd_eod.append(lrd_eod)
-    models_lrd_eop.append(lrd_eop)
-    models_lrd_te.append(lrd_te)
+    models_lrd_dp.append(lrd_dp/total_size)
+    models_lrd_eod.append(lrd_eod/total_size)
+    models_lrd_eop.append(lrd_eop/total_size)
+    models_lrd_te.append(lrd_te/total_size)
+    models_lrd_const.append(lrd_const/total_size)
+
+
+models_consistency = [0 for model in model_list]
+#CONSISTENCY TEST, COMPARE PREDICTION TO PREDICTIONS OF NEIGHBORS
+consistency = 0
+dataset = dataset.loc[:, dataset.columns != "index"]
+dataset = dataset.loc[:, dataset.columns != label]
+dataset3 = copy.deepcopy(dataset)
+for sens in sens_attrs:
+    dataset3 = dataset3.loc[:, dataset3.columns != sens]
+for i, row_outer in df.iterrows():
+    nbrs = NearestNeighbors(n_neighbors=10, algorithm='kd_tree').fit(dataset.values)
+    indices = nbrs.kneighbors(dataset.loc[i].values.reshape(1, -1),\
+        return_distance=False)
+    real_indices = df.index[indices].tolist()
+    df_local = df.loc[real_indices[0]]
+    model_count = 0
+    for model in model_list:
+        knn_ppv = 0
+        knn_count = 0
+        for j, row in df_local.iterrows():
+            knn_ppv = knn_ppv + row[model]
+            knn_count = knn_count + 1
+        knn_pppv = knn_ppv/knn_count
+        models_consistency[model_count] = models_consistency[model_count] + abs(df.loc[i][model] - knn_pppv)
+        model_count = model_count + 1
+    nbrs = NearestNeighbors(n_neighbors=10, algorithm='kd_tree').fit(dataset3.values)
+    indices = nbrs.kneighbors(dataset3.loc[i].values.reshape(1, -1),\
+        return_distance=False)
+    real_indices = df.index[indices].tolist()
+    df_local = df.loc[real_indices[0]]
+    model_count = 0
+    for model in model_list:
+        knn_ppv = 0
+        knn_count = 0
+        for j, row in df_local.iterrows():
+            knn_ppv = knn_ppv + row[model]
+            knn_count = knn_count + 1
+        knn_pppv = knn_ppv/knn_count
+        model_count = model_count + 1
 
 
 model_count = 0
 for model in model_list:
+    result_df.at[model_count, "consistency"] = models_consistency[model_count]/len(df) * 100
     result_df.at[model_count, "lrd_dp"] = models_lrd_dp[model_count] * 100
     result_df.at[model_count, "lrd_eod"] = models_lrd_eod[model_count] * 100
     result_df.at[model_count, "lrd_eop"] = models_lrd_eop[model_count] * 100
     result_df.at[model_count, "lrd_te"] = models_lrd_te[model_count] * 100
+    result_df.at[model_count, "lrd_const"] = models_lrd_const[model_count] * 100
     model_count = model_count + 1
 
 result_df.to_csv(link + "EVALUATION.csv")

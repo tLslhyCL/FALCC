@@ -7,6 +7,7 @@ import warnings
 import copy
 import pandas as pd
 import joblib
+from aif360.datasets import BinaryLabelDataset
 from sklearn.neighbors import NearestNeighbors
 
 class FALCESNew:
@@ -40,14 +41,20 @@ class FALCESNew:
         All possible model combinations.
 
     model_dict: dictionary
-        Dictionary containing model-related information
+        Dictionary containing model-related information.
+
+    link: str
+        Link of the output directory.
+
+    fairinput: boolean
+        Is set to True, if we use fair classifiers as input.
 
     pre_processed: boolean
         Is set to True, if the datasets have been properly preprocessed. For the current
         new approach, this is a requirement.
     """
     def __init__(self, metricer, index, sens_attrs, label, favored, model_list, X_test, model_comb,
-        model_dict, pre_processed=True):
+        model_dict, link, fairinput, pre_processed=True):
         self.metricer = metricer
         self.index = index
         self.sens_attrs = sens_attrs
@@ -57,6 +64,8 @@ class FALCESNew:
         self.X_test = X_test
         self.model_comb = model_comb
         self.model_dict = model_dict
+        self.link = link
+        self.fairinput = fairinput
         self.pre_processed = pre_processed
 
 
@@ -124,6 +133,19 @@ class FALCESNew:
             sens_count = sens_count + 1
 
         X2_pred = copy.deepcopy(X_pred)
+
+        if self.fairinput:
+            ##For FaX if needed
+            X3 = copy.deepcopy(X_pred)
+            X3 = X3.loc[:, X3.columns != self.sens_attrs[0]]
+
+            ##For LFR if needed
+            lfr_pred_df = pd.merge(X_pred, y_pred, left_index=True, right_index=True)
+            dataset_pred = BinaryLabelDataset(df=lfr_pred_df, label_names=[self.label], protected_attribute_names=self.sens_attrs)
+            lfr_model = joblib.load(self.link + "LFR_model.pkl")
+            dataset_transf_pred = lfr_model.transform(dataset_pred)
+            lfr_preds = list(dataset_transf_pred.labels)
+            lfr_prediction = [lfr_preds[i][0] for i in range(len(lfr_preds))]
 
         #Build the KNN Tree for each group. Only possible if the data is preprocessed accordingly.
         grouped_df = self.X_test.groupby(self.sens_attrs)
@@ -212,11 +234,16 @@ class FALCESNew:
                 #Use the model of the group in the combination, where the entry belongs to.
                 joblib_file = comb[group_count]
                 used_model = joblib.load(joblib_file)
-                prediction = used_model.predict(X_pred.iloc[i].values.reshape(1, -1))
+                if "FaX" in joblib_file:
+                    prediction = used_model.predict(X3.iloc[i].values.reshape(1, -1))[0]
+                elif "LFR" in joblib_file:
+                    prediction = lfr_prediction[i]
+                else:
+                    prediction = used_model.predict(X_pred.iloc[i].values.reshape(1, -1))[0]
                 pred_index = y_pred.index[i]
                 true_value = y_pred.iloc[i]
                 pred_df = self.metricer.prediction_output_add(pred_df, X_pred, pred_count, self.index,
-                    pred_index, true_value, prediction[0], nfd, comb[group_count], comb)
+                    pred_index, true_value, prediction, nfd, comb[group_count], comb)
                 pred_count = pred_count + 1
                 predicted.add(pred_index)
                 #Now iterate over the other KNN
@@ -237,10 +264,15 @@ class FALCESNew:
                             count = count + 1
                         joblib_file = comb[group_count]
                         used_model = joblib.load(joblib_file)
-                        prediction = used_model.predict(X_pred.loc[pred_index].values.reshape(1, -1))
+                        if "FaX" in joblib_file:
+                            prediction = used_model.predict(X3.loc[pred_index].values.reshape(1, -1))[0]
+                        elif "LFR" in joblib_file:
+                            prediction = lfr_prediction[i]
+                        else:
+                            prediction = used_model.predict(X_pred.loc[pred_index].values.reshape(1, -1))[0]
                         true_value = y_pred.iloc[i]
                         pred_df = self.metricer.prediction_output_add(pred_df, X_pred, pred_count,
-                            self.index, pred_index, true_value, prediction[0], nfd,
+                            self.index, pred_index, true_value, prediction, nfd,
                             comb[group_count], comb)
                         pred_count = pred_count + 1
                         predicted.add(pred_index)

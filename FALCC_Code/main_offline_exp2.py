@@ -1,15 +1,6 @@
 """
-Call methods for the offline phase of the FALCC algorithm. Also runs the offline phase of the
-FALCES [2] algorithm and its variants & calls the algorithms for FairBoost [3] and Decouple [1].
-[1] Dwork, C., Immorlica, N., Kalai, A., Leiserson, M. "Decoupled Classifiers for Group-Fair
-    and Efficient Machine Learning". 2018.
-[2] Lässig, N., Oppold, S., Herschel, M. "Metrics and Algorithms for Locally Fair and Accurate
-    Classifications using Ensembles". 2022.
-[3] Bhaskaruni, D., Hu, H., Lan, C. "Improving Prediction Fairness via Model Ensemble". 2019.
+Runs the second set of experiments.
 """
-#https://deslib.readthedocs.io/en/latest/modules/util/diversity.html
-#look up predictions in dictionary
-#wwrite julia
 import warnings
 import argparse
 import os
@@ -129,10 +120,6 @@ if args.ignore_sens == "True":
     ignore_sens = True
 else:
     ignore_sens = False
-if args.fairboost == "True":
-    fairboost = True
-else:
-    fairboost = False
 if args.trained_models != None:
     trained_models = ast.literal_eval(args.trained_models)
 
@@ -180,8 +167,9 @@ model_training_list = ["DecisionTree", "LinearSVM", "NonlinearSVM",\
     "SoftmaxRegression", "AdaBoost"]
 
 
-run_main = algorithm.RunTraining(X_test, y_test, test_id_list, sens_attrs, index, label, link,
+run_main = algorithm.RunTraining(X_test, y_test, test_id_list, sens_attrs, index, label, favored, link,
     ignore_sens)
+
 if not "sample_weight" in locals():
     sample_weight = None
 
@@ -189,113 +177,25 @@ test_df, d, model_list, model_comb = run_main.train(model_training_list, X_train
     sample_weight, modelsize)
 test_df.to_csv(link + "testdata_predictions.csv", index_label=index)
 test_df = test_df.sort_index()
-key_list = []
-grouped_df = df.groupby(sens_attrs)
-for key, items in grouped_df:
-    key_list.append(key)
-test_df_sbt, d_sbt, model_list_sbt, model_comb_sbt = run_main.sbt_train(model_training_list,
-    X_train, y_train, train_id_list, sample_weight, key_list, modelsize)
-test_df_sbt.to_csv(link + "testdata_sbt_predictions.csv", index_label=index)
-test_df_sbt = test_df_sbt.sort_index()
 
 model_comb_list = itertools.combinations(model_list, 4)
-#y_results = y_test[label].to_list()
+y_results = y_test[label].to_list()
 
-if len(sens_attrs) == 1:
-    q_list = []
-    for comb in model_comb_list:
-        q_min = 1
-        q_avg = 0
-        double_comb = list(itertools.combinations(comb, 2))
-        for dc in double_comb:
-            y_results = []
-            y1_results = []
-            y2_results = []
-            model1_fav = re.split("/", dc[0])
-            model1_prot = copy.deepcopy(model1_fav)
-            model1_fav[-1] = "1_" + model1_fav[-1]
-            model1_prot[-1] = "0_" + model1_prot[-1]
-            model1_fav = "/".join(model1_fav)
-            model1_prot = "/".join(model1_prot)
-            model2_fav = re.split("/", dc[1])
-            model2_prot = copy.deepcopy(model2_fav)
-            model2_fav[-1] = "1_" + model2_fav[-1]
-            model2_prot[-1] = "0_" + model2_prot[-1]
-            model2_fav = "/".join(model2_fav)
-            model2_prot = "/".join(model2_prot)
-            for i, row in y_test.iterrows():
-                y_results.append(row[label])
-                if X_test.at[i, sens_attrs[0]] == 0:
-                    y1_results.append(test_df_sbt.at[i, model1_prot])
-                    y2_results.append(test_df_sbt.at[i, model2_prot])
-                else:
-                    y1_results.append(test_df_sbt.at[i, model1_fav])
-                    y2_results.append(test_df_sbt.at[i, model2_fav])
-            q_score = div.Q_statistic(y_results, y1_results, y2_results)
-            if q_score < q_min:
-                q_min = q_score
-            q_avg += (1 + q_score)/2
-        q_avg = q_avg/len(double_comb)
-        q_list.append((comb,q_avg,q_min))
-    q_list.sort(key=lambda tup: tup[1], reverse=True)
-else:
-    q_list = []
-    for comb in model_comb_list:
-        q_min = 1
-        q_avg = 0
-        double_comb = list(itertools.combinations(comb, 2))
-        for dc in double_comb:
-            y_results = []
-            y1_results = []
-            y2_results = []
-            model1_fav = re.split("/", dc[0])
-            model1_prot = copy.deepcopy(model1_fav)
-            model1_prot1 = copy.deepcopy(model1_fav)
-            model1_prot2 = copy.deepcopy(model1_fav)
-            model1_prot3 = copy.deepcopy(model1_fav)
-            model1_fav[-1] = str(favored) + "_" + model1_fav[-1]
-            model1_prot1[-1] = "(0, 1)_" + model1_prot[-1]
-            model1_prot2[-1] = "(1, 0)_" + model1_prot[-1]
-            model1_prot3[-1] = "(0, 0)_" + model1_prot[-1]
-            model1_fav = "/".join(model1_fav)
-            model1_prot1 = "/".join(model1_prot1)
-            model1_prot2 = "/".join(model1_prot2)
-            model1_prot3 = "/".join(model1_prot3)
-            model2_fav = re.split("/", dc[1])
-            model2_prot = copy.deepcopy(model2_fav)
-            model2_prot1 = copy.deepcopy(model2_fav)
-            model2_prot2 = copy.deepcopy(model2_fav)
-            model2_prot3 = copy.deepcopy(model2_fav)
-            model2_fav[-1] = str(favored) + "_" + model2_fav[-1]
-            model2_prot1[-1] = "(0, 1)_" + model2_prot[-1]
-            model2_prot2[-1] = "(1, 0)_" + model2_prot[-1]
-            model2_prot3[-1] = "(0, 0)_" + model2_prot[-1]
-            model2_fav = "/".join(model2_fav)
-            model2_prot1 = "/".join(model2_prot1)
-            model2_prot2 = "/".join(model2_prot2)
-            model2_prot3 = "/".join(model2_prot3)
-            for i, row in y_test.iterrows():
-                y_results.append(row[label])
-                if X_test.at[i, sens_attrs[0]] == 0 and X_test.at[i, sens_attrs[1]] == 1:
-                    y1_results.append(test_df_sbt.at[i, model1_prot1])
-                    y2_results.append(test_df_sbt.at[i, model2_prot1])
-                elif X_test.at[i, sens_attrs[0]] == 1 and X_test.at[i, sens_attrs[1]] == 0:
-                    y1_results.append(test_df_sbt.at[i, model1_prot2])
-                    y2_results.append(test_df_sbt.at[i, model2_prot2])
-                elif X_test.at[i, sens_attrs[0]] == 0 and X_test.at[i, sens_attrs[1]] == 0:
-                    y1_results.append(test_df_sbt.at[i, model1_prot3])
-                    y2_results.append(test_df_sbt.at[i, model2_prot3])
-                else:
-                    y1_results.append(test_df_sbt.at[i, model1_fav])
-                    y2_results.append(test_df_sbt.at[i, model2_fav])
-            q_score = div.Q_statistic(y_results, y1_results, y2_results)
-            if q_score < q_min:
-                q_min = q_score
-            q_avg += (1 + q_score)/2
-        q_avg = q_avg/len(double_comb)
-        q_list.append((comb,q_avg,q_min))
-    q_list.sort(key=lambda tup: tup[1], reverse=True)
-
+q_list = []
+for comb in model_comb_list:
+    q_min = 1
+    q_avg = 0
+    double_comb = list(itertools.combinations(comb, 2))
+    for dc in double_comb:
+        y1_results = d[dc[0]][1]
+        y2_results = d[dc[1]][1]
+        q_score = div.Q_statistic(y_results, y1_results, y2_results)
+        if q_score < q_min:
+            q_min = q_score
+        q_avg += (1 + q_score)/2
+    q_avg = q_avg/len(double_comb)
+    q_list.append((comb,q_avg,q_min))
+q_list.sort(key=lambda tup: tup[1], reverse=True)
 
 with open(link + "q_scores.txt", 'w') as outfile:
     for qtup in q_list:
@@ -368,7 +268,6 @@ for comb in q_list:
 
 d_list = [q_list[-1][0], combn4, combn3, combn2, combn1, combn0, comb0, comb1, comb2, comb3, comb4]
 
-
 #Estimate the clustersize and then create the clusters
 if proxy == "reweigh":
     with open(link + "reweighing_attributes.txt", 'w') as outfile:
@@ -389,6 +288,8 @@ if proxy == "reweigh":
             for sens in sens_attrs:
                 z_arr = df_new[sens]
                 sens_corr = abs(pearsonr(x_arr, z_arr)[0])
+                if math.isnan(sens_corr):
+                    sens_corr = 1
                 col_diff += (1 - sens_corr)
             col_weight = col_diff/len(sens_attrs)
             weight_dict[col] = col_weight
@@ -417,6 +318,8 @@ elif proxy == "remove":
                 z_arr = df_new[sens]
                 pearson = pearsonr(x_arr, z_arr)
                 sens_corr = abs(pearson[0])
+                if math.isnan(sens_corr):
+                    sens_corr = 1
                 if sens_corr > 0.5 and pearson[1] < 0.05:
                     X_test_new = X_test_new.loc[:, X_test_new.columns != col]
                     cont = True
@@ -427,6 +330,9 @@ elif proxy == "remove":
         df_new.to_csv("Datasets/removed/" + input_file + ".csv", index_label=index)
 else:
     X_test_new = X_test
+
+if proxy == "no":
+    model_dict = None
 
 
 X_test_cluster = copy.deepcopy(X_test_new)
@@ -466,11 +372,6 @@ else:
     if cluster_algorithm == "LOGmeans":
         clustersize = log_means(X_test_cluster, min_cluster, max_cluster)
 
-    #XMEANS -- Needed XMeans code relies on other implementation and is not published in our repo.
-    #if cluster_algorithm == "XMeans":
-    #    xm_clust = XMeans(max_cluster)
-    #    xm_clust.fit(X_test_cluster.to_numpy())
-    #    clustersize = xm_clust.n_clusters
 
 #Save the number of generated clusters as metadata
 with open(link + "clustersize.txt", 'w') as outfile:
@@ -508,107 +409,54 @@ for i, comblist in enumerate(d_list):
         # directory already exists
         pass
 
-    #metricer = Metrics(sens_attrs, label)
+    test_df2 = copy.deepcopy(test_df)
+    for m in model_list:
+        if m not in comblist:
+            test_df2 = test_df2.drop(columns=[m])
+    model_test = metricer.test_score(test_df2, comblist)
+    model_test.to_csv(link + str(i) + "/inaccuracy_testphase.csv", index_label=index)
+    model_test = model_test.sort_index()
+    
+
     if len(sens_attrs) == 1:
-        test_df_sbt2 = copy.deepcopy(test_df_sbt)
-        comblist1 = []
-        comblist2 = []
-        d_sbt2 = copy.deepcopy(d_sbt)
-        for m in model_list:
-            m1 = re.split("/", m)
-            m2 = copy.deepcopy(m1)
-            m1[-1] = "0_" + m1[-1]
-            m2[-1] = "1_" + m2[-1]
-            m1 = "/".join(m1)
-            m2 = "/".join(m2)
-            if m not in comblist:
-                test_df_sbt2 = test_df_sbt2.drop(columns=[m1,m2])
-                del d_sbt2[0][m1]
-                del d_sbt2[1][m2]
-            else:
-                comblist1.append(m1)
-                comblist2.append(m2)
+        combs = list(itertools.combinations(comblist,2))
     else:
-        test_df_sbt2 = copy.deepcopy(test_df_sbt)
-        comblist1 = []
-        comblist2 = []
-        comblist3 = []
-        comblist4 = []
-        d_sbt2 = copy.deepcopy(d_sbt)
-        for m in model_list:
-            m1 = re.split("/", m)
-            m2 = copy.deepcopy(m1)
-            m3 = copy.deepcopy(m1)
-            m4 = copy.deepcopy(m1)
-            m1[-1] = "(0, 0)_" + m1[-1]
-            m2[-1] = "(0, 1)_" + m2[-1]
-            m1 = "/".join(m1)
-            m2 = "/".join(m2)
-            m3[-1] = "(1, 0)_" + m3[-1]
-            m4[-1] = "(1, 1)_" + m4[-1]
-            m3 = "/".join(m3)
-            m4 = "/".join(m4)
-            if m not in comblist:
-                test_df_sbt2 = test_df_sbt2.drop(columns=[m1,m2,m3,m4])
-                del d_sbt2[(0, 0)][m1]
-                del d_sbt2[(0, 1)][m2]
-                del d_sbt2[(1, 0)][m3]
-                del d_sbt2[(1, 1)][m4]
-            else:
-                comblist1.append(m1)
-                comblist2.append(m2)
-                comblist3.append(m3)
-                comblist4.append(m4)
+        combs = list(itertools.combinations(comblist,4))
 
-    model_test_sbt = metricer.test_score_sbt(test_df_sbt2, d_sbt2)
-    model_test_sbt.to_csv(link + "inaccuracy_testphase_sbt.csv", index_label=index)
-    model_test_sbt = model_test_sbt.sort_index()
-
-    combs = list(itertools.product(comblist1, comblist2))
-    comblist = comblist1 + comblist2
-
-    if proxy == "no":
-        weight_dict = None
     #Run all offline versions of the FALCC and FALCES algorithms
-    falccsbt = algorithm.FALCC(metricer, index, sens_attrs, label, favored, comblist,
-        X_test, combs, d_sbt2, proxy, weight_dict, ignore_sens, pre_processed)
-    model_dict_sbt, kmeans = falccsbt.cluster_offline(X_test_cluster, kmeans, test_df_sbt2,
-        metric, weight, link, other_folder=i, sbt=True)
+    falcc = algorithm.FALCC(metricer, index, sens_attrs, label, favored, comblist, X_test,
+        combs, d, proxy, link, False, weight_dict, ignore_sens, pre_processed)
+    model_dict, kmeans = falcc.cluster_offline(X_test_cluster, kmeans, test_df2, metric, weight,
+        i, sbt=False)
 
-    df = falccsbt.predict(model_dict_sbt, X_pred, y_pred, True, kmeans)
-    df.to_csv(link + str(i) + "/FALCC-SBT_prediction_output.csv", index=False)
+    df = falcc.predict(model_dict, X_pred, y_pred, False, kmeans)
+    df.to_csv(link + str(i) + "/FALCC_prediction_output.csv", index=False)
     with open(link + str(i) + "/q_score.txt", 'w') as outfile:
         outfile.write(str(q_val[i]) + "\n")
         outfile.write(str(q_avg_list[i]))
 
-    if testall:
-        falcessbt = algorithm.FALCES(metricer, index, sens_attrs, label, favored, comblist,
-            X_test, combs, d_sbt2, pre_processed)
-        global_model_comb_sbt = falcessbt.efficient_offline(model_test_sbt, metric, weight, threshold,
-            comb_amount)
+    falces = algorithm.FALCES(metricer, index, sens_attrs, label, favored, comblist,
+            X_test, combs, d, link, False, pre_processed)
+    global_model_comb = falces.efficient_offline(model_test, metric, weight, threshold, comb_amount)
 
-        falcesnewsbt = algorithm.FALCESNew(metricer, index, sens_attrs, label, favored, comblist,
-            X_test, combs, d_sbt2, pre_processed)
 
-        df = falcesnewsbt.predict(test_df_sbt2, X_pred, y_pred, "performance-efficient", metric, weight, True,
-            knn_size, global_model_comb_sbt)
-        df.to_csv(link + str(i) + "/FALCES-SBT-PFA-NEW_prediction_output.csv", index=False)
+    falcesnew = algorithm.FALCESNew(metricer, index, sens_attrs, label, favored, comblist,
+            X_test, combs, d, link, False, pre_processed)
 
-        df = falcessbt.predict(test_df_sbt2, X_pred, y_pred, "performance-efficient", metric, weight, True,
-            knn_size, global_model_comb_sbt)
-        df.to_csv(link + str(i) + "/FALCES-SBT-PFA_prediction_output.csv", index=False)
+    df = falcesnew.predict(test_df2, X_pred, y_pred, "performance-efficient", metric, weight, False,
+        knn_size, global_model_comb)
+    df.to_csv(link + str(i) + "/FALCES-PFA-NEW_prediction_output.csv", index=False)
 
-        df = falcesnewsbt.predict(test_df_sbt2, X_pred, y_pred, "naive", metric, weight, True, knn_size)
-        df.to_csv(link + str(i) + "/FALCES-SBT-NEW_prediction_output.csv", index=False)
+    df = falces.predict(test_df2, X_pred, y_pred, "performance-efficient", metric, weight, False,
+        knn_size, global_model_comb)
+    df.to_csv(link + str(i) + "/FALCES-PFA_prediction_output.csv", index=False)
 
-        df = falcessbt.predict(test_df_sbt2, X_pred, y_pred, "naive", metric, weight, True, knn_size)
-        df.to_csv(link + str(i) + "/FALCES-SBT_prediction_output.csv", index=False)
+    df = falcesnew.predict(test_df2, X_pred, y_pred, "naive", metric, weight, False, knn_size)
+    df.to_csv(link + str(i) + "/FALCES-NEW_prediction_output.csv", index=False)
 
-        decouple_alg = algorithm.Decouple(metricer, index, pred_id_list, sens_attrs, label, favored, combs)
-        df = decouple_alg.decouple(model_test_sbt, X_pred, y_pred, metric, weight, sbt=True)
-        df.to_csv(link + str(i) + "/Decouple-SBT_prediction_output.csv", index=False)
+    df = falces.predict(test_df2, X_pred, y_pred, "naive", metric, weight, False, knn_size)
+    df.to_csv(link + str(i) + "/FALCES_prediction_output.csv", index=False)
 
-        if fairboost and i == 0:
-            fb = algorithm.FairBoost(index, pred_id_list, sens_attrs, favored, label, DecisionTreeClassifier())
-            df_result = fb.fit_predict(X_train, y_train, X_pred, y_pred, r=0.1)
-            df_result.to_csv(link + "FairBoost_prediction_output.csv", index=False)
+    decouple_alg = algorithm.Decouple(metricer, index, pred_id_list, sens_attrs, label, favored, combs, link, False)
+    df = decouple_alg.decouple(model_test, X_pred, y_pred, metric, weight, sbt=False)
+    df.to_csv(link + str(i) + "/Decouple_prediction_output.csv", index=False)

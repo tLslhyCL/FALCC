@@ -64,6 +64,12 @@ class ModelOps():
             classifier, prediction, model_name = model_obj.log_regr(sample_weight)
         elif model == "SoftmaxRegression":
             classifier, prediction, model_name = model_obj.softmax_regr(sample_weight)
+        elif model == "FaX":
+            classifier, prediction, model_name = model_obj.fax()
+        elif model == "Fair-SMOTE":
+            classifier, prediction, model_name = model_obj.smote()
+        elif model == "LFR":
+            classifier, prediction, model_name = model_obj.lfr()
         elif model == "AdaBoost":
             classifier_list, prediction_list, model_name = model_obj.adaboost(modelsize)
             joblist_file_list = []

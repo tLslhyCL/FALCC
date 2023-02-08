@@ -42,9 +42,8 @@ ca = "LOGmeans"
 #(11) randomstate
 randomstate = 100
 #(12) run only FALCC or also the other algorithms
-testall = False
+testall = True
 #(13) if the amount of sensitive groups is binary, the FairBoost algorithm can be run
-fairboost_list = [True, True]
 #####################################################################################
 
 for loop, input_file in enumerate(input_file_list):
@@ -52,7 +51,7 @@ for loop, input_file in enumerate(input_file_list):
     label = label_list[loop]
     favored = favored_list[loop]
     allowed = allowed_list[loop]
-    fairboost = fairboost_list[loop]
+    fairboost = False
     
     link = "Results/Exp2_" + str(proxy) + "_" + str(input_file) + "/"
 
@@ -71,11 +70,9 @@ for loop, input_file in enumerate(input_file_list):
 
 
     if testall:
-        models = ["Decouple-SBT", "FALCES-SBT", "FALCES-SBT-PFA", "FALCES-SBT-NEW", "FALCES-SBT-PFA-NEW", "FALCC-SBT"]
-        if fairboost:
-            models.append("FairBoost")
+        models = ["Decouple", "FALCES", "FALCES-PFA", "FALCES-NEW", "FALCES-PFA-NEW", "FALCC"]
     else:
-        models = ["FALCC-SBT"]
+        models = ["FALCC"]
 
     for i in range(11):
         link2 = link + str(i) + "/"

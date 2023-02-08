@@ -10,6 +10,7 @@ import warnings
 import copy
 import pandas as pd
 import joblib
+from aif360.datasets import BinaryLabelDataset
 
 class Decouple:
     """This class is used to use the decouple functions.
@@ -34,10 +35,17 @@ class Decouple:
     favored: tuple of float
         Tuple of the values of the favored group.
 
-    model_list: list of strings
-        List of the model names.
+    model_comb: list of tuples
+        List of the model combinations.
+
+    link: str
+        Link of the output directory.
+
+    fairinput: boolean
+        Is set to True, if we use fair classifiers as input.
     """
-    def __init__(self, metricer, index, pred_id_list, sens_attrs, label, favored, model_comb):
+    def __init__(self, metricer, index, pred_id_list, sens_attrs, label, favored, model_comb,
+        link, fairinput):
         self.metricer = metricer
         self.index = index
         self.pred_id_list = pred_id_list
@@ -45,6 +53,8 @@ class Decouple:
         self.label = label
         self.favored = favored
         self.model_comb = model_comb
+        self.link = link
+        self.fairinput = fairinput
 
 
     def decouple(self, model_test, X_pred, y_pred, metric, weight, sbt):
@@ -106,6 +116,21 @@ class Decouple:
 
         X2_pred = copy.deepcopy(X_pred)
 
+
+        if self.fairinput:
+            ##For FaX if needed
+            X3 = copy.deepcopy(X_pred)
+            X3 = X3.loc[:, X3.columns != self.sens_attrs[0]]
+
+            ##For LFR if needed
+            lfr_pred_df = pd.merge(X_pred, y_pred, left_index=True, right_index=True)
+            dataset_pred = BinaryLabelDataset(df=lfr_pred_df, label_names=[self.label], protected_attribute_names=self.sens_attrs)
+            lfr_model = joblib.load(self.link + "LFR_model.pkl")
+            dataset_transf_pred = lfr_model.transform(dataset_pred)
+            lfr_preds = list(dataset_transf_pred.labels)
+            lfr_prediction = [lfr_preds[i][0] for i in range(len(lfr_preds))]
+
+
         #Iterate over every entry in the prediction dataframe and use the corresponding model of
         #the best global model combination.
         for i, row in X_pred.iterrows():
@@ -142,8 +167,13 @@ class Decouple:
             #current entry of the prediction dataset.
             joblib_file = group
             used_model = joblib.load(joblib_file)
-            prediction = used_model.predict(X_pred.iloc[count].values.reshape(1, -1))
-            pred_df.at[count, decouple] = prediction[0]
+            if "FaX" in joblib_file:
+                prediction = used_model.predict(X3.loc[i].values.reshape(1, -1))[0]
+            elif "LFR" in joblib_file:
+                prediction = lfr_prediction[count]
+            else:
+                prediction = used_model.predict(X_pred.iloc[count].values.reshape(1, -1))[0]
+            pred_df.at[count, decouple] = prediction
             pred_df.at[count, "model_used"] = group
             pred_df.at[count, "model_comb"] = comb
 

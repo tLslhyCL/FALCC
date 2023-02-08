@@ -1,13 +1,21 @@
 """
 In this python file multiple classification models are trained.
 """
+import copy
+import pandas as pd
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import LinearSVC
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LogisticRegression
+from aif360.algorithms.preprocessing import LFR
+from aif360.datasets import BinaryLabelDataset
 from algorithm.codes import AdaBoostClassifierMult
+from .FaX_AI import FaX_methods
+from .Fair_SMOTE.SMOTE import smote
+from .Fair_SMOTE.Generate_Samples import generate_samples
+
 
 
 class Models():
@@ -35,12 +43,13 @@ class Models():
     ignore_sens: boolean
         Proxy is set to TRUE if the sensitive attribute should be ignored.
     """
-    def __init__(self, X_train, X_test, y_train, y_test, sens_attrs, ignore_sens=False):
+    def __init__(self, X_train, X_test, y_train, y_test, sens_attrs, favored, ignore_sens=False):
         self.X_train = X_train
         self.X_test = X_test
         self.y_train = y_train
         self.y_test = y_test
         self.sens_attrs = sens_attrs
+        self.favored = favored
         self.ignore_sens = ignore_sens
 
 
@@ -250,3 +259,210 @@ class Models():
                 estimator_predictions.append(classifier.predict(self.X_test))
 
         return classifier_list, estimator_predictions, "adaboost"
+
+
+    def fax(self, method="MIM"):
+        """Run the FaX algorithm
+
+        Parameters
+        ----------
+        method: str
+            FaX method that should be used: "MIM" or "OPT"
+
+
+        Returns/Output
+        ----------
+        model: Trained model
+
+        pred: list
+            List containing the predictions
+
+        "FaX": Name of the algorithm chosen
+        """
+        X2 = self.X_train.loc[:, self.X_train.columns != self.sens_attrs[0]]
+        Z2 = self.X_train[self.sens_attrs[0]].to_frame()
+        Y2 = self.y_train
+
+        X3 = self.X_test.loc[:, self.X_test.columns != self.sens_attrs[0]]
+
+        if method == "MIM":
+            model = FaX_methods.MIM(X2, Z2, Y2)
+        elif method == "OPT":
+            model = FaX_methods.OIM(X2, Z2, Y2)
+
+        pred = model.predict(X3)
+
+        return model, pred, "FaX"
+
+
+    def smote(self):
+        """Preprocess the dataset using Fair-SMOTE and the train a classifier on the new dataset.
+
+        Parameters: -
+
+
+        Returns/Output
+        ----------
+        clf: Trained classifier on the preprocessed dataset
+
+        prediction: list
+            List containing the predictions
+
+        "Fair-SMOTE": Name of the algorithm chosen
+        """
+        label = list(self.y_train.columns)[0]
+        train_df = copy.deepcopy(self.X_train)
+        train_df[label] = self.y_train
+        dataset_orig_train = copy.deepcopy(train_df)
+        train_df.reset_index(drop=True, inplace=True)
+        cols = train_df.columns
+        smt = smote(train_df)
+        train_df = smt.run()
+        train_df.columns = cols
+        y_train_new = train_df[label]
+        X_train_new = train_df.drop(label, axis=1)
+
+        dict_cols = dict()
+        cols = list(train_df.columns)
+        for i, col in enumerate(cols):
+            dict_cols[i] = col
+        #Find Class & protected attribute distribution
+        zero_zero = len(dataset_orig_train[(dataset_orig_train[label] == 0)
+            & (dataset_orig_train[self.sens_attrs[0]] == 0)])
+        zero_one = len(dataset_orig_train[(dataset_orig_train[label] == 0)
+            & (dataset_orig_train[self.sens_attrs[0]] == 1)])
+        one_zero = len(dataset_orig_train[(dataset_orig_train[label] == 1)
+            & (dataset_orig_train[self.sens_attrs[0]] == 0)])
+        one_one = len(dataset_orig_train[(dataset_orig_train[label] == 1)
+            & (dataset_orig_train[self.sens_attrs[0]] == 1)])
+        maximum = max(zero_zero,zero_one,one_zero,one_one)
+        if maximum == zero_zero:
+            zero_one_to_be_incresed = maximum - zero_one
+            one_zero_to_be_incresed = maximum - one_zero
+            one_one_to_be_incresed = maximum - one_one
+            df_zero_one = dataset_orig_train[(dataset_orig_train[label] == 0)
+                & (dataset_orig_train[self.sens_attrs[0]] == 1)]
+            df_one_zero = dataset_orig_train[(dataset_orig_train[label] == 1)
+                & (dataset_orig_train[self.sens_attrs[0]] == 0)]
+            df_one_one = dataset_orig_train[(dataset_orig_train[label] == 1)
+                & (dataset_orig_train[self.sens_attrs[0]] == 1)]
+            df_zero_one = generate_samples(zero_one_to_be_incresed,df_zero_one,'',dict_cols)
+            df_one_zero = generate_samples(one_zero_to_be_incresed,df_one_zero,'',dict_cols)
+            df_one_one = generate_samples(one_one_to_be_incresed,df_one_one,'',dict_cols)
+            df_new = copy.deepcopy(df_zero_one)
+            df_new = df_new.append(df_one_zero)
+            df_new = df_new.append(df_one_one)
+            df_zero_zero = dataset_orig_train[(dataset_orig_train[label] == 0)
+                & (dataset_orig_train[self.sens_attrs[0]] == 0)]
+            df_new = df_new.append(df_zero_zero)
+        if maximum == zero_one:
+            zero_zero_to_be_incresed = maximum - zero_zero
+            one_zero_to_be_incresed = maximum - one_zero
+            one_one_to_be_incresed = maximum - one_one
+            df_zero_zero = dataset_orig_train[(dataset_orig_train[label] == 0)
+                & (dataset_orig_train[self.sens_attrs[0]] == 0)]
+            df_one_zero = dataset_orig_train[(dataset_orig_train[label] == 1)
+                & (dataset_orig_train[self.sens_attrs[0]] == 0)]
+            df_one_one = dataset_orig_train[(dataset_orig_train[label] == 1)
+                & (dataset_orig_train[self.sens_attrs[0]] == 1)]
+            df_zero_zero = generate_samples(zero_zero_to_be_incresed,df_zero_zero,'',dict_cols)
+            df_one_zero = generate_samples(one_zero_to_be_incresed,df_one_zero,'',dict_cols)
+            df_one_one = generate_samples(one_one_to_be_incresed,df_one_one,'',dict_cols)
+            df_new = copy.deepcopy(df_zero_zero)
+            df_new = df_new.append(df_one_zero)
+            df_new = df_new.append(df_one_one)
+            df_zero_one = dataset_orig_train[(dataset_orig_train[label] == 0)
+                & (dataset_orig_train[self.sens_attrs[0]] == 1)]
+            df_new = df_new.append(df_zero_one)
+        if maximum == one_zero:
+            zero_zero_to_be_incresed = maximum - zero_zero
+            zero_one_to_be_incresed = maximum - zero_one
+            one_one_to_be_incresed = maximum - one_one
+            df_zero_zero = dataset_orig_train[(dataset_orig_train[label] == 0)
+                & (dataset_orig_train[self.sens_attrs[0]] == 0)]
+            df_zero_one = dataset_orig_train[(dataset_orig_train[label] == 0)
+                & (dataset_orig_train[self.sens_attrs[0]] == 1)]
+            df_one_one = dataset_orig_train[(dataset_orig_train[label] == 1)
+                & (dataset_orig_train[self.sens_attrs[0]] == 1)]
+            df_zero_zero = generate_samples(zero_zero_to_be_incresed,df_zero_zero,'',dict_cols)
+            df_zero_one = generate_samples(zero_one_to_be_incresed,df_zero_one,'',dict_cols)
+            df_one_one = generate_samples(one_one_to_be_incresed,df_one_one,'',dict_cols)
+            df_new = copy.deepcopy(df_zero_zero)
+            df_new = df_new.append(df_zero_one)
+            df_new = df_new.append(df_one_one)
+            df_one_zero = dataset_orig_train[(dataset_orig_train[label] == 1)
+                & (dataset_orig_train[self.sens_attrs[0]] == 0)]
+            df_new = df_new.append(df_one_zero)
+        if maximum == one_one:
+            zero_zero_to_be_incresed = maximum - zero_zero
+            one_zero_to_be_incresed = maximum - one_zero
+            zero_one_to_be_incresed = maximum - zero_one
+            df_zero_zero = dataset_orig_train[(dataset_orig_train[label] == 0)
+                & (dataset_orig_train[self.sens_attrs[0]] == 0)]
+            df_one_zero = dataset_orig_train[(dataset_orig_train[label] == 1)
+                & (dataset_orig_train[self.sens_attrs[0]] == 0)]
+            df_zero_one = dataset_orig_train[(dataset_orig_train[label] == 0)
+                & (dataset_orig_train[self.sens_attrs[0]] == 1)]
+            df_zero_zero = generate_samples(zero_zero_to_be_incresed,df_zero_zero,'',dict_cols)
+            df_one_zero = generate_samples(one_zero_to_be_incresed,df_one_zero,'',dict_cols)
+            df_zero_one = generate_samples(zero_one_to_be_incresed,df_zero_one,'',dict_cols)
+            df_new = copy.deepcopy(df_zero_zero)
+            df_new = df_new.append(df_one_zero)
+            df_new = df_new.append(df_zero_one)
+            df_one_one = dataset_orig_train[(dataset_orig_train[label] == 1)
+                & (dataset_orig_train[self.sens_attrs[0]] == 1)]
+            df_new = df_new.append(df_one_one)
+
+
+        X_train_new, y_train_new = df_new.loc[:, df_new.columns != label], df_new[label]
+        clf = LogisticRegression(C=1.0, penalty="l2", solver="liblinear", max_iter=100)
+        clf.fit(X_train_new, y_train_new)
+        prediction = clf.predict(self.X_test)
+
+        return clf, prediction, "Fair-SMOTE"
+
+
+    def lfr(self):
+        """Return a fair representation.
+
+        Parameters: -
+
+
+        Returns
+        -------
+        model: Trained LFR model
+
+        prediction: list of predicted label for our testdata X_test
+
+        "LFR": string of the used model name
+        """
+        label = list(self.y_train.columns)[0]
+        train_df = pd.merge(self.X_train, self.y_train, left_index=True, right_index=True)
+        test_df = pd.merge(self.X_test, self.y_test, left_index=True, right_index=True)
+        dataset_train = BinaryLabelDataset(df=train_df, label_names=[label], protected_attribute_names=self.sens_attrs)
+        dataset_test = BinaryLabelDataset(df=test_df, label_names=[label], protected_attribute_names=self.sens_attrs)
+
+        ###Only binary now
+        privileged_groups = []
+        unprivileged_groups = []
+        priv_dict = dict()
+        unpriv_dict = dict()
+        priv_val = self.favored
+        if priv_val == 0:
+            priv_dict[self.sens_attrs[0]] = 0
+            unpriv_dict[self.sens_attrs[0]] = 1
+        elif priv_val == 1:
+            priv_dict[self.sens_attrs[0]] = 1
+            unpriv_dict[self.sens_attrs[0]] = 0
+
+        privileged_groups = [priv_dict]
+        unprivileged_groups = [unpriv_dict]
+
+        model = LFR(unprivileged_groups, privileged_groups)
+        model = model.fit(dataset_train)
+        dataset_transf_test = model.transform(dataset_test)
+
+        preds = list(dataset_transf_test.labels)
+        prediction = [preds[i][0] for i in range(len(preds))]
+
+        return model, prediction, "LFR"

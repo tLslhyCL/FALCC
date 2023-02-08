@@ -35,13 +35,14 @@ class RunTraining:
     ignore_sens: bool
         Set to True if the sensitive attributes additionally should be ignored for the prediction.
     """
-    def __init__(self, X_test, y_test, test_id_list, sens_attrs, index, label, link, ignore_sens=False):
+    def __init__(self, X_test, y_test, test_id_list, sens_attrs, index, label, favored, link, ignore_sens=False):
         self.X_test = X_test
         self.y_test = y_test
         self.test_id_list = test_id_list
         self.sens_attrs = sens_attrs
         self.index = index
         self.label = label
+        self.favored = favored
         self.link = link
         self.ignore_sens = ignore_sens
 
@@ -82,7 +83,7 @@ class RunTraining:
         model_comb: list of tuple
             List of tuples of model combinations.
         """
-        model = Models(X_train, self.X_test, y_train, self.y_test, self.sens_attrs, self.ignore_sens)
+        model = Models(X_train, self.X_test, y_train, self.y_test, self.sens_attrs, self.favored, self.ignore_sens)
 
         model_list = []
 

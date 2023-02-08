@@ -26,7 +26,7 @@ favored_list = [(1), (0), (0)]
 label_list = ["crime", "label", "label"]
 #(5) the metric for which the results should be optimized:
 #"demographic_parity", "equalized_odds", "equal_opportunity", "treatment_equality"
-metric = "demographic_parity"
+metric = "treatment_equality"
 #(6) which training strategy is used:
 #"adaboost" (for our AdaptedAdaBoost strategy), "single_classifiers", "no" if own models are used
 training = "adaboost"
@@ -43,8 +43,9 @@ ca = "LOGmeans"
 randomstate = -1
 #(12) run only FALCC or also the other algorithms
 testall = False
-#(13) if the amount of sensitive groups is binary, the FairBoost algorithm can be run
-fairboost_list = [True, True]
+#(13) if the FairBoost and iFair algorithms should be run
+fairboost_list = [True, True, True]
+ifair_list = [True, True, True]
 #####################################################################################
 
 for loop, input_file in enumerate(input_file_list):
@@ -53,6 +54,7 @@ for loop, input_file in enumerate(input_file_list):
     favored = favored_list[loop]
     allowed = allowed_list[loop]
     fairboost = fairboost_list[loop]
+    ifair = ifair_list = [loop]
     
     link = "Results/" + str(proxy) + "_" + str(input_file) + "/"
 
@@ -65,25 +67,31 @@ for loop, input_file in enumerate(input_file_list):
     subprocess.check_call(['python', '-Wignore', 'main_offline.py', '-i', str(input_file),
         '-o', str(link), '--sensitive', str(sensitive), '--label', str(label),
         '--favored', str(favored), '--ccr', str(ccr), '--metric', str(metric),
-        '--training', str(training), '--fairboost', str(fairboost), '--randomstate',
-        str(randomstate), "--proxy", str(proxy), "--allowed", str(allowed),
+        '--training', str(training), '--fairboost', str(fairboost), '--ifair', str(ifair),
+        '--randomstate', str(randomstate), "--proxy", str(proxy), "--allowed", str(allowed),
         '--testall', str(testall), '--cluster_algorithm', str(ca)])
     subprocess.check_call(['python', '-Wignore', 'main_online.py', '--folder', str(link)])
 
     #Run evaluation
     if testall:
-        if training != "no":
+        if training == "fair" or training == "no":
+            models = ["Decouple", "FALCES", "FALCES-PFA", "FALCES-NEW", "FALCES-PFA-NEW", "FALCC"]
+        else:
             models = ["Decouple", "Decouple-SBT", "FALCES", "FALCES-PFA", "FALCES-SBT", "FALCES-SBT-PFA",\
                 "FALCES-NEW", "FALCES-PFA-NEW", "FALCES-SBT-NEW", "FALCES-SBT-PFA-NEW", "FALCC", "FALCC-SBT"]
-        else:
-            models = ["Decouple", "FALCES", "FALCES-PFA", "FALCES-NEW", "FALCES-PFA-NEW", "FALCC"]
-        if fairboost:
-            models.append("FairBoost")
+        if len(sensitive) > 1:
+            models.append("FaX")
+            models.append("Fair-SMOTE")
+            models.append("LFR")
+            if fairboost:
+                models.append("FairBoost")
+            if ifair:
+                models.append("iFair")
     else:
-        if training != "no":
-            models = ["FALCC", "FALCC-SBT"]
-        else:
+        if training == "fair" or training == "no":
             models = ["FALCC"]
+        else:
+            models = ["FALCC", "FALCC-SBT"]
     subprocess.check_call(['python', '-Wignore', 'evaluation.py', '--ds', str(input_file),
         '--folder', str(link), '--sensitive', str(sensitive), '--label', str(label),
         '--favored', str(favored), '--proxy', str(proxy), '--models', str(models)])
