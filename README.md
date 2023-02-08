@@ -43,6 +43,7 @@ Further, we run LFR [4], iFair [5], FaX [6] & Fair-SMOTE [7]
   - Copy the content from the official implementation & put them inside this folder: https://github.com/plahoti-lgtm/iFair
   - Change the "fit" method to use the following parameters: 'def fit(self, X_train, sens_attrs, dataset=None)'
   - Adapt the first else-clause of the fit method to:
+  
         X_train_new = copy.deepcopy(X_train)
         for sens in sens_attrs:
             selector = [x for x in range(X_train_new.shape[1]) if x != sens]
@@ -50,16 +51,17 @@ Further, we run LFR [4], iFair [5], FaX [6] & Fair-SMOTE [7]
         D_X_F = pairwise.euclidean_distances(X_train_new,
                                              X_train_new)
         l = X_train.shape[1] - len(sens_attrs)
+        
 - FaX [6]:
--- Create a folder called "FaX_AI" in 'FALCC_Code/algorithm/codes'
--- Copy the content from the official implementation & put them inside this folder: https://github.com/social-info-lab/FaX-AI
+  - Create a folder called "FaX_AI" in 'FALCC_Code/algorithm/codes'
+  - Copy the content from the official implementation & put them inside this folder: https://github.com/social-info-lab/FaX-AI
 - Fair-SMOTE [7]:
--- Create a folder called "Fair_SMOTE" in 'FALCC_Code/algorithm/codes'
--- Copy "SMOTE.py" & "Generate_Samples.py" from the official implementation & put them inside this folder: https://github.com/joymallyac/Fair-SMOTE
--- Within "Generate_Samples.py":
---- Add a parameter called dict_cols to the "generate_samples" function.
---- Add the following else clause in the bottom of the "generate_samples" function: 'final_df = final_df.rename(columns=dict_cols, errors="raise")'
--- If non-binary sensitive groups are in the input, it will cause problems. In that case, the implementation within our framework has to be adapted,
+  - Create a folder called "Fair_SMOTE" in 'FALCC_Code/algorithm/codes'
+  - Copy "SMOTE.py" & "Generate_Samples.py" from the official implementation & put them inside this folder: https://github.com/joymallyac/Fair-SMOTE
+  - Within "Generate_Samples.py":
+    - Add a parameter called dict_cols to the "generate_samples" function.
+    - Add the following else clause in the bottom of the "generate_samples" function: 'final_df = final_df.rename(columns=dict_cols, errors="raise")'
+  - If non-binary sensitive groups are in the input, it will cause problems. In that case, the implementation within our framework has to be adapted,
     e.g. for the Adult Data Set with two sensitive attributes an example is given here: https://github.com/joymallyac/Fair-SMOTE/blob/master/Fair-SMOTE/Adult_Sex_Race.ipynb
 
 2. Now the algorithms can be run. 
