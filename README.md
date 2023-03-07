@@ -69,5 +69,6 @@ Further, we run LFR [4], iFair [5], FaX [6] & Fair-SMOTE [7]
 - Otherwise run "full_test.py"
 - Information on the possible input parameters and how to change datasets etc. are given within the respective files.
 - For non-binary sensitive groups: Only run the adaboost or single_classifier training.
+- Create an empty "reweigh" folder inside "Datasets/" if needed (when choosing "reweigh" strategy. Likewise create an empty "removed" folder when using "remove" as strategy
 
 The code has been tested using a Windows PC. Other systems, like Mac, might create shelve files in other versions, requiring adaptations.
