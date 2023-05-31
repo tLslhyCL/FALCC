@@ -1,6 +1,6 @@
 # FALCC
 
-This repository contains the codes needed to reproduce the experiments of our submitted FAccT 2023 paper:
+This repository contains the codes needed to reproduce the experiments of our submitted EDBT 2024 paper:
 "FALCC: Efficiently performing locally fair and accurate classifications"
 
 
