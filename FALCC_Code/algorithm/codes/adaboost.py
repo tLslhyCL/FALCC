@@ -7,6 +7,7 @@ import copy
 import numpy as np
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.pipeline import Pipeline
+from algorithm.codes import DiversityMeasures
 
 
 class AdaBoostClassifierMult:
@@ -19,10 +20,13 @@ class AdaBoostClassifierMult:
 
     iterations: integer
         Amount of (maximum) iterations == Amount of classifiers in the output.
+    self.estimators_: list of models
+        List that contains the classifiers of each iteration.
     """
     def __init__(self, base_estimator_list, iterations=6):
         self.base_estimator_list = base_estimator_list
         self.iterations = iterations
+        self.estimators_ = []
 
 
     def fit(self, X, y):
@@ -41,7 +45,7 @@ class AdaBoostClassifierMult:
 
         Returns
         -------
-        trained_estimator: list of models
+        self.estimators_: list of models
             List that contains the best classifier of each iteration.
         """
         dataset_length = len(X)
@@ -49,7 +53,6 @@ class AdaBoostClassifierMult:
         sample_weight = [1/dataset_length for i in range(dataset_length)]
         sample_weight2 = [1 for i in range(dataset_length)]
 
-        trained_estimator = []
 
         for i in range(self.iterations):
             estimator = self.base_estimator_list[i%3]
@@ -72,7 +75,7 @@ class AdaBoostClassifierMult:
                 else:
                     correct_classified.append(j)
 
-            trained_estimator.append(current_estimator)
+            self.estimators_.append(current_estimator)
             alpha = 1/2 * np.log((1-error)/(error + 1e-24))
 
             for j in wrong_classified:
@@ -89,4 +92,8 @@ class AdaBoostClassifierMult:
                 sample_weight[j] = sample_weight[j] / weight_total
                 sample_weight2[j] = sample_weight2[j] / weight_total2 * dataset_length
 
-        return trained_estimator
+        diversity = DiversityMeasures().entropy_score(self, X, y)
+        
+        print("Entropy: "+ str(diversity))
+
+        return self.estimators_

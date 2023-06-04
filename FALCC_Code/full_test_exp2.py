@@ -17,7 +17,7 @@ import pandas as pd
 #####################################################################################
 #Here we need to specify:
 #(1) the dataset name(s)
-input_file_list = ["Communities", "implicit30", "social30"]
+input_file_list = ["communities", "implicit30", "social30"]
 #(2) the name(s) of the sensitive attributes as a list
 sens_attrs_list = [["race"], ["sensitive"], ["sensitive"]]
 #(3) the value of the favored group
@@ -29,7 +29,7 @@ label_list = ["crime", "label", "label"]
 metric = "demographic_parity"
 #(6) which training strategy is used:
 #"adaboost" (for our AdaptedAdaBoost strategy), "single_classifiers", "no" if own models are used
-training = "adaboost"
+training = "exp2"
 #(7) if a proxy strategy is used ("no", "reweigh", "remove")
 proxy = "reweigh"
 #(8) list of allowed "proxy" attributes (required, if reweigh or remove strategy is chosen)
@@ -42,7 +42,7 @@ ca = "LOGmeans"
 #(11) randomstate
 randomstate = 100
 #(12) run only FALCC or also the other algorithms
-testall = True
+testall = False
 #(13) if the amount of sensitive groups is binary, the FairBoost algorithm can be run
 #####################################################################################
 
@@ -68,21 +68,9 @@ for loop, input_file in enumerate(input_file_list):
         str(randomstate), "--proxy", str(proxy), "--allowed", str(allowed),
         '--testall', str(testall), '--cluster_algorithm', str(ca)])
 
+    models = ["FALCC" + str(i) for i in range(288)]
 
-    if testall:
-        models = ["Decouple", "FALCES", "FALCES-PFA", "FALCES-NEW", "FALCES-PFA-NEW", "FALCC"]
-    else:
-        models = ["FALCC"]
-
-    for i in range(11):
-        link2 = link + str(i) + "/"
-        if os.path.isdir(link2):
-            if testall and fairboost:
-                subprocess.check_call(['cp', str(link) + "FairBoost_prediction_output.csv", link2])
-            subprocess.check_call(['cp', link + "testdata_predictions.csv", link2])
-            subprocess.check_call(['cp', link + "cluster.out.bak", link2])
-            subprocess.check_call(['cp', link + "cluster.out.dat", link2])
-            subprocess.check_call(['cp', link + "cluster.out.dir", link2])
-            subprocess.check_call(['python', '-Wignore', 'evaluation.py', '--ds', str(input_file),
-                '--folder', str(link2), '--sensitive', str(sensitive), '--label', str(label),
-                '--favored', str(favored), '--proxy', str(proxy), '--models', str(models)])
+    for i in range(288):
+        subprocess.check_call(['python', '-Wignore', 'evaluation_exp2.py', '--ds', str(input_file),
+            '--folder', str(link), '--sensitive', str(sensitive), '--label', str(label),
+            '--favored', str(favored), '--proxy', str(proxy), '--models', str(models)])

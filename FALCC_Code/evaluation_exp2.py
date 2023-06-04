@@ -6,6 +6,8 @@ import argparse
 import ast
 import shelve
 import copy
+import re
+import joblib
 import pandas as pd
 from sklearn.neighbors import NearestNeighbors
 from algorithm.codes import DiversityMeasures
@@ -70,7 +72,20 @@ for key in my_shelf:
     kmeans = my_shelf["kmeans"]
 my_shelf.close()
 
+X = orig_dataset.loc[:, orig_dataset.columns != label]
+y = orig_dataset[label]
+
 for model in model_list:
+    nr = int(re.findall(r'\d+', model)[0])
+    if nr % 2 == 0:
+        modelpkl = joblib.load(link + "AdaBoostClassic" + str(nr) + ".pkl")
+    else:
+        modelpkl = joblib.load(link + "RandomForestClassic" + str(nr) + ".pkl")
+    #print(modelpkl.estimators_)
+
+    DivMeasure = DiversityMeasures()
+    result_df.at[model_count, "min_q"] = DivMeasure.QS_score(modelpkl, X, y, maxScore=True)
+    result_df.at[model_count, "entropy"] = DivMeasure.entropy_score(modelpkl, X, y)
     result_df.at[model_count, "model"] = model
     result_df.at[model_count, "dataset"] = ds
 

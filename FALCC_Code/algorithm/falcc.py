@@ -79,7 +79,7 @@ class FALCC:
         self.pre_processed = pre_processed
 
 
-    def predict(self, model_dict, X_pred, y_pred, sbt, kmeans):
+    def predict(self, model_dict, X_pred, y_pred, sbt, kmeans, count):
         """This function predicts the label of each prediction sample for FALCC/FALCC-SBT
         (the online phase).
 
@@ -180,7 +180,7 @@ class FALCC:
             for attr in self.sens_attrs:
                 pred_df.at[pred_count, attr] = X_pred.loc[y_pred.index[i], attr]
             pred_df.at[pred_count, self.label] = y_pred.iloc[i].values[0]
-            pred_df.at[pred_count, cluster_model] = prediction
+            pred_df.at[pred_count, cluster_model + str(count)] = prediction
             pred_df.at[pred_count, "model_used"] = model
 
             pred_count = pred_count + 1
@@ -262,9 +262,9 @@ class FALCC:
                         for key2, item2 in grouped_df:
                             if key2 == sens_grp:
                                 knn_df = grouped_df.get_group(key2)
-                                #for sens_attr in self.sens_attrs:
-                                 #   knn_df = knn_df.loc[:, knn_df.columns != sens_attr]
-                                nbrs = NearestNeighbors(n_neighbors=15, algorithm='kd_tree').fit(knn_df.values)
+                                for sens_attr in self.sens_attrs:
+                                    knn_df2 = knn_df.loc[:, knn_df.columns != sens_attr]
+                                nbrs = NearestNeighbors(n_neighbors=15, algorithm='kd_tree').fit(knn_df2.values)
                                 indices = nbrs.kneighbors(cluster_center.reshape(1, -1), return_distance=False)
                                 real_indices = self.X_test.index[indices].tolist()
                                 nearest_neighbors_df = test_df.loc[real_indices[0]]

@@ -20,10 +20,10 @@ from kneed import KneeLocator
 import algorithm
 from algorithm.codes import Metrics
 from algorithm.parameter_estimation import log_means
-from algorithm.codes.FaX_AI.FaX_methods import MIM
-from algorithm.codes.Fair_SMOTE.SMOTE import smote
-from algorithm.codes.Fair_SMOTE.Generate_Samples import generate_samples
-from algorithm.codes.iFair_helper.iFair import iFair
+#from algorithm.codes.FaX_AI.FaX_methods import MIM
+#from algorithm.codes.Fair_SMOTE.SMOTE import smote
+#from algorithm.codes.Fair_SMOTE.Generate_Samples import generate_samples
+#from algorithm.codes.iFair_helper.iFair import iFair
 from sklearn.linear_model import LogisticRegression
 from aif360.algorithms.preprocessing import *
 from aif360.datasets import BinaryLabelDataset
@@ -184,8 +184,10 @@ if training == "single_classifiers":
         "LogisticRegression", "SoftmaxRegression"]
 elif training == "fair":
     model_training_list = ["FaX", "Fair-SMOTE", "LFR"]
-elif training == "adaboost":
-    model_training_list = ["AdaBoost"]
+elif training == "opt_random_forest":
+    model_training_list = ["OptimizedRandomForest"]
+elif training == "opt_adaboost":
+    model_training_list = ["OptimizedAdaBoost"]
 
 
 if training != "no":
@@ -195,7 +197,7 @@ if training != "no":
         sample_weight = None
 
     test_df, d, model_list, model_comb = run_main.train(model_training_list, X_train, y_train,
-        sample_weight, modelsize)
+        sample_weight, modelsize, [])
     test_df.to_csv(link + "testdata_predictions.csv", index_label=index)
     test_df = test_df.sort_index()
 
@@ -205,7 +207,7 @@ if training != "no":
         for key, items in grouped_df:
             key_list.append(key)
         test_df_sbt, d_sbt, model_list_sbt, model_comb_sbt = run_main.sbt_train(model_training_list,
-            X_train, y_train, train_id_list, sample_weight, key_list, modelsize)
+            X_train, y_train, train_id_list, sample_weight, key_list, modelsize, [])
         test_df_sbt.to_csv(link + "testdata_sbt_predictions.csv", index_label=index)
         test_df_sbt = test_df_sbt.sort_index()
 else:

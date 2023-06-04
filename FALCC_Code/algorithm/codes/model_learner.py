@@ -9,12 +9,15 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.svm import LinearSVC
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import AdaBoostClassifier
 from aif360.algorithms.preprocessing import LFR
 from aif360.datasets import BinaryLabelDataset
 from algorithm.codes import AdaBoostClassifierMult
-from .FaX_AI import FaX_methods
-from .Fair_SMOTE.SMOTE import smote
-from .Fair_SMOTE.Generate_Samples import generate_samples
+from algorithm.codes import HyperOptimizedLearner
+#from .FaX_AI import FaX_methods
+#from .Fair_SMOTE.SMOTE import smote
+#from .Fair_SMOTE.Generate_Samples import generate_samples
 
 
 
@@ -259,6 +262,161 @@ class Models():
                 estimator_predictions.append(classifier.predict(self.X_test))
 
         return classifier_list, estimator_predictions, "adaboost"
+
+    def opt_learner(self, ensemble_strat, input_file, sbt):
+        if ensemble_strat=="RandomForest":
+            estimator = HyperOptimizedLearner(learner="RandomForest", search_method="full", input_file=input_file, sbt=sbt, cv=5, ensemble_entropy=1)
+        elif ensemble_strat=="AdaBoost":
+            estimator = HyperOptimizedLearner(learner="AdaBoost", search_method="full", input_file=input_file, sbt=sbt, cv=5, ensemble_entropy=1)
+        if self.ignore_sens:
+            estimator.fit(self.X_train[list(set(self.X_train.columns)-set(self.sens_attrs))], self.y_train)
+        else:
+            estimator.fit(self.X_train, self.y_train)
+        classifier_list = estimator.estimators_
+        estimator_predictions = []
+        for classifier in classifier_list:
+            if self.ignore_sens:
+                estimator_predictions.append(classifier.predict(self.X_test[list(set(self.X_test.columns)-set(self.sens_attrs))]))
+            else:
+                estimator_predictions.append(classifier.predict(self.X_test))
+        return classifier_list, estimator_predictions, ensemble_strat
+
+    def optimized_adaboost(self, n_estimators=17, criterion="gini", max_depth=2, max_features="sqrt", splitter="random"):
+        """Fit the AdaBoost models according to the given training data via given parameters.
+
+        Parameters
+        ----------
+        n_estimators: integer
+            The number of trees in the forest.
+
+        criterion: “gini”, “entropy”, “log_loss”}
+            The split criterion of that the base models will use for training.
+
+        max_depth: integer
+            The maximum depth of the trees used as base models. 
+
+        max_features: {“sqrt”, “log2”, None}
+            The number of random features to consider when looking for the best split.
+
+        splitter: {"best", "random"}
+            The strategy used to choose the split at each node. Supported strategies are “best” to choose the best split and “random” to choose the best random split.
+
+
+        Returns
+        -------
+        classifier_list: Trained AdaBoost classifier list
+
+        estimator_predictions: list of list of predicted label for each estimator testdata X_test
+
+        "AdaBoostOpt": string of the used model name
+        """
+
+
+        ab = AdaBoostClassifier(base_estimator=DecisionTreeClassifier(criterion=criterion, max_depth=max_depth, max_features=max_features, splitter=splitter),n_estimators=n_estimators)
+        if self.ignore_sens:
+            ab.fit(self.X_train[list(set(self.X_train.columns)-set(self.sens_attrs))], self.y_train)
+        else:
+            ab.fit(self.X_train, self.y_train)
+        classifier_list = ab.estimators_
+        estimator_predictions = []
+        for classifier in classifier_list:
+            if self.ignore_sens:
+                estimator_predictions.append(classifier.predict(self.X_test[list(set(self.X_test.columns)-set(self.sens_attrs))]))
+            else:
+                estimator_predictions.append(classifier.predict(self.X_test))
+        return classifier_list, estimator_predictions, "AdaBoostOpt"
+
+
+    def adaboost_classic(self, n_estimators=17, max_depth=2, splitter="random"):
+        """Fit the AdaBoost models according to the given training data via given parameters.
+
+        Parameters
+        ----------
+        n_estimators: integer
+            The number of trees in the forest.
+
+        criterion: “gini”, “entropy”, “log_loss”}
+            The split criterion of that the base models will use for training.
+
+        max_depth: integer
+            The maximum depth of the trees used as base models. 
+
+        max_features: {“sqrt”, “log2”, None}
+            The number of random features to consider when looking for the best split.
+
+        splitter: {"best", "random"}
+            The strategy used to choose the split at each node. Supported strategies are “best” to choose the best split and “random” to choose the best random split.
+
+
+        Returns
+        -------
+        classifier_list: Trained AdaBoost classifier list
+
+        estimator_predictions: list of list of predicted label for each estimator testdata X_test
+
+        "AdaBoostOpt": string of the used model name
+        """
+
+
+        ab = AdaBoostClassifier(base_estimator=DecisionTreeClassifier(criterion="entropy", max_depth=max_depth, max_features="log2", splitter=splitter), n_estimators=n_estimators)
+        if self.ignore_sens:
+            ab.fit(self.X_train[list(set(self.X_train.columns)-set(self.sens_attrs))], self.y_train)
+        else:
+            ab.fit(self.X_train, self.y_train)
+        classifier_list = ab.estimators_
+        estimator_predictions = []
+        for classifier in classifier_list:
+            if self.ignore_sens:
+                estimator_predictions.append(classifier.predict(self.X_test[list(set(self.X_test.columns)-set(self.sens_attrs))]))
+            else:
+                estimator_predictions.append(classifier.predict(self.X_test))
+        return classifier_list, estimator_predictions, "AdaBoostClassic", ab
+
+
+    def rf_classic(self, n_estimators=17, max_depth=2, criterion="gini"):
+        """Fit the AdaBoost models according to the given training data via given parameters.
+
+        Parameters
+        ----------
+        n_estimators: integer
+            The number of trees in the forest.
+
+        criterion: “gini”, “entropy”, “log_loss”}
+            The split criterion of that the base models will use for training.
+
+        max_depth: integer
+            The maximum depth of the trees used as base models. 
+
+        max_features: {“sqrt”, “log2”, None}
+            The number of random features to consider when looking for the best split.
+
+        splitter: {"best", "random"}
+            The strategy used to choose the split at each node. Supported strategies are “best” to choose the best split and “random” to choose the best random split.
+
+
+        Returns
+        -------
+        classifier_list: Trained AdaBoost classifier list
+
+        estimator_predictions: list of list of predicted label for each estimator testdata X_test
+
+        "AdaBoostOpt": string of the used model name
+        """
+
+
+        rf = RandomForestClassifier(criterion=criterion, max_depth=max_depth, n_estimators=n_estimators)
+        if self.ignore_sens:
+            rf.fit(self.X_train[list(set(self.X_train.columns)-set(self.sens_attrs))], self.y_train)
+        else:
+            rf.fit(self.X_train, self.y_train)
+        classifier_list = rf.estimators_
+        estimator_predictions = []
+        for classifier in classifier_list:
+            if self.ignore_sens:
+                estimator_predictions.append(classifier.predict(self.X_test[list(set(self.X_test.columns)-set(self.sens_attrs))]))
+            else:
+                estimator_predictions.append(classifier.predict(self.X_test))
+        return classifier_list, estimator_predictions, "RandomForestClassic", rf
 
 
     def fax(self, method="MIM"):

@@ -33,7 +33,7 @@ zmy_shelf.close()
 
 #Version 1: Algorithm is the cluster approach
 start = time.time()
-df = falcc.predict(model_dict, X_pred, y_pred, False, kmeans)
+df = falcc.predict(model_dict, X_pred, y_pred, False, kmeans, "")
 df.to_csv(link + "FALCC_prediction_output.csv", index=False)
 runtime_analysis.at[analysis_counter, "algorithm"] = "FALCC"
 runtime_analysis.at[analysis_counter, "time"] = str(time.time() - start)
@@ -41,7 +41,7 @@ analysis_counter = analysis_counter + 1
 
 if training != "no" and training != "fair":
     start = time.time()
-    df = falccsbt.predict(model_dict_sbt, X_pred, y_pred, True, kmeans)
+    df = falccsbt.predict(model_dict_sbt, X_pred, y_pred, True, kmeans, "")
     df.to_csv(link + "FALCC-SBT_prediction_output.csv", index=False)
     runtime_analysis.at[analysis_counter, "algorithm"] = "FALCC-SBT"
     runtime_analysis.at[analysis_counter, "time"] = str(time.time() - start)

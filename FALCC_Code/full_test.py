@@ -17,7 +17,7 @@ import pandas as pd
 #####################################################################################
 #Here we need to specify:
 #(1) the dataset name(s)
-input_file_list = ["Communities", "implicit30", "social30"]
+input_file_list = ["communities", "implicit30", "social30"]
 #(2) the name(s) of the sensitive attributes as a list
 sens_attrs_list = [["race"], ["sensitive"], ["sensitive"]]
 #(3) the value of the favored group
@@ -26,10 +26,11 @@ favored_list = [(1), (0), (0)]
 label_list = ["crime", "label", "label"]
 #(5) the metric for which the results should be optimized:
 #"demographic_parity", "equalized_odds", "equal_opportunity", "treatment_equality"
-metric = "treatment_equality"
+metric = "demographic_parity"
 #(6) which training strategy is used:
-#"adaboost" (for our AdaptedAdaBoost strategy), "single_classifiers", "no" if own models are used
-training = "adaboost"
+#"opt_adaboost" (for our proposed strategy), "opt_random_forest",
+#"adaboost" (for our (old) AdaptedAdaboost strategy), "single_classifiers", "no" if own models are used
+training = "opt_adaboost"
 #(7) if a proxy strategy is used ("no", "reweigh", "remove")
 proxy = "reweigh"
 #(8) list of allowed "proxy" attributes (required, if reweigh or remove strategy is chosen)
