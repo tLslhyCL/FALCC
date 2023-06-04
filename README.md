@@ -65,10 +65,9 @@ Further, we run LFR [4], iFair [5], FaX [6] & Fair-SMOTE [7]
     e.g. for the Adult Data Set with two sensitive attributes an example is given here: https://github.com/joymallyac/Fair-SMOTE/blob/master/Fair-SMOTE/Adult_Sex_Race.ipynb
 
 2. Now the algorithms can be run. 
-- For experiment 2: run "full_test_exp2.py". For this experiment it will run the non-SBT versions only.
-- Otherwise run "full_test.py"
-- Information on the possible input parameters and how to change datasets etc. are given within the respective files.
-- For non-binary sensitive groups: Only run the adaboost or single_classifier training.
+- For experiment 2: run "full_test_exp2.py".
+- Otherwise run "full_test.py": For our proposed method, choose "opt_adaboost" as training strategy for FALCC, and "single_classifier" for the other models
+- Other information on the possible input parameters and how to change datasets etc. are given within the respective files.
 - Create an empty "reweigh" folder inside "Datasets/" if needed (when choosing "reweigh" strategy. Likewise create an empty "removed" folder when using "remove" as strategy
 
 The code has been tested using a Windows PC. Other systems, like Mac, might create shelve files in other versions, requiring adaptations.

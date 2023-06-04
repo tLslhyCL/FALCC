@@ -4,3 +4,4 @@ scikit-learn==1.0.2
 kneed==0.7.0
 joblib==1.0.1
 scipy==1.5.4
+aif360
